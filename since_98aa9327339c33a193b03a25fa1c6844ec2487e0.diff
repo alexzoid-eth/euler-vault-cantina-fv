@@ -1,0 +1,4079 @@
+diff --git a/src/EVault/DToken.sol b/src/EVault/DToken.sol
+index 2111d39..018914f 100644
+--- a/src/EVault/DToken.sol
++++ b/src/EVault/DToken.sol
+@@ -7,9 +7,11 @@ import {Events} from "./shared/Events.sol";
+ import {IERC20, IEVault} from "./IEVault.sol";
+ 
+ /// @title DToken
++/// @custom:security-contact security@euler.xyz
+ /// @author Euler Labs (https://www.eulerlabs.com/)
+ /// @notice Contract implements read only ERC20 interface, and `Transfer` events, for EVault's debt
+ contract DToken is IERC20, Errors, Events {
++    /// @notice The address of the EVault associated with this DToken
+     address public immutable eVault;
+ 
+     constructor() {
+@@ -18,44 +20,66 @@ contract DToken is IERC20, Errors, Events {
+ 
+     // ERC20 interface
+ 
++    /// @notice The debt token (dToken) name
++    /// @return The dToken name
+     function name() external view returns (string memory) {
+         return string.concat("Debt token of ", IEVault(eVault).name());
+     }
+ 
++    /// @notice The debt token (dToken) symbol
++    /// @return The dToken symbol
+     function symbol() external view returns (string memory) {
+         return string.concat(IEVault(eVault).symbol(), "-DEBT");
+     }
+ 
++    /// @notice Decimals of the dToken, same as EVault's
++    /// @return The dToken decimals
+     function decimals() external view returns (uint8) {
+         return IEVault(eVault).decimals();
+     }
+ 
++    /// @notice Return total supply of the DToken
++    /// @return The dToken total supply
+     function totalSupply() external view returns (uint256) {
+         return IEVault(eVault).totalBorrows();
+     }
+ 
++    /// @notice Balance of a particular account, in dTokens
++    /// @param owner The account to query
++    /// @return The balance of the account
+     function balanceOf(address owner) external view returns (uint256) {
+         return IEVault(eVault).debtOf(owner);
+     }
+ 
++    /// @notice Retrieve the current allowance
++    /// @return The allowance
++    /// @dev Approvals are not supported by the dToken
+     function allowance(address, address) external pure returns (uint256) {
+         return 0;
+     }
+ 
++    /// @notice Function required by the ERC20 interface
++    /// @dev Approvals are not supported by the DToken
+     function approve(address, uint256) external pure returns (bool) {
+         revert E_NotSupported();
+     }
+ 
++    /// @notice Function required by the ERC20 interface
++    /// @dev Transfers are not supported by the DToken directly
+     function transfer(address, uint256) external pure returns (bool) {
+         revert E_NotSupported();
+     }
+ 
++    /// @notice Function required by the ERC20 interface
++    /// @dev Transfers are not supported by the DToken directly
+     function transferFrom(address, address, uint256) external pure returns (bool) {
+         revert E_NotSupported();
+     }
+ 
+     // Events
+ 
++    /// @notice Emit an ERC20 Transfer event
++    /// @dev Only callable by the parent EVault
+     function emitTransfer(address from, address to, uint256 value) external {
+         if (msg.sender != eVault) revert E_Unauthorized();
+ 
+@@ -64,6 +88,7 @@ contract DToken is IERC20, Errors, Events {
+ 
+     // Helpers
+ 
++    /// @notice Return the address of the asset the debt is denominated in
+     function asset() external view returns (address) {
+         return IEVault(eVault).asset();
+     }
+diff --git a/src/EVault/Dispatch.sol b/src/EVault/Dispatch.sol
+index 67b409a..08917a0 100644
+--- a/src/EVault/Dispatch.sol
++++ b/src/EVault/Dispatch.sol
+@@ -17,10 +17,10 @@ import {AddressUtils} from "./shared/lib/AddressUtils.sol";
+ import "./shared/Constants.sol";
+ 
+ /// @title Dispatch
++/// @custom:security-contact security@euler.xyz
+ /// @author Euler Labs (https://www.eulerlabs.com/)
+ /// @notice Contract which ties in the EVault modules and provides utilities for routing calls to modules and the EVC
+ abstract contract Dispatch is
+-    Base,
+     InitializeModule,
+     TokenModule,
+     VaultModule,
+@@ -30,15 +30,25 @@ abstract contract Dispatch is
+     BalanceForwarderModule,
+     GovernanceModule
+ {
++    /// @notice Address of the Initialize module
+     address public immutable MODULE_INITIALIZE;
++    /// @notice Address of the Token module
+     address public immutable MODULE_TOKEN;
++    /// @notice Address of the Vault module
+     address public immutable MODULE_VAULT;
++    /// @notice Address of the Borrowing module
+     address public immutable MODULE_BORROWING;
++    /// @notice Address of the Liquidation module
+     address public immutable MODULE_LIQUIDATION;
++    /// @notice Address of the RiskManager module
+     address public immutable MODULE_RISKMANAGER;
++    /// @notice Address of the BalanceForwarder module
+     address public immutable MODULE_BALANCE_FORWARDER;
++    /// @notice Address of the Governance module
+     address public immutable MODULE_GOVERNANCE;
+ 
++    /// @title DeployedModules
++    /// @notice This struct is used to pass in the addresses of EVault modules during deployment
+     struct DeployedModules {
+         address initialize;
+         address token;
+@@ -63,17 +73,23 @@ abstract contract Dispatch is
+ 
+     // Modifier proxies the function call to a module and low-level returns the result
+     modifier use(address module) {
+-        _; // when using the modifier, it is assumed the function body is empty and no code will run before delegating to module.
++        _; // when using the modifier, it is assumed the function body is empty.
+         delegateToModule(module);
+     }
+ 
+     // Delegate call can't be used in a view function. To work around this limitation,
+     // static call `this.viewDelegate()` function, which in turn will delegate the payload to a module.
+     modifier useView(address module) {
+-        _; // when using the modifier, it is assumed the function body is empty and no code will run before delegating to module.
++        _; // when using the modifier, it is assumed the function body is empty.
+         delegateToModuleView(module);
+     }
+ 
++    // Modifier ensures, that the body of the function is always executed from the EVC call.
++    // It is accomplished by intercepting calls incoming directly to the vault and passing them
++    // to the EVC.call function. EVC calls the vault back with original calldata. As a result, the account
++    // and vault status checks are always executed in the checks deferral frame, at the end of the call,
++    // outside of the vault's re-entrancy protections.
++    // The modifier is applied to all functions which schedule account or vault status checks.
+     modifier callThroughEVC() {
+         if (msg.sender == address(evc)) {
+             _;
+@@ -113,15 +129,17 @@ abstract contract Dispatch is
+     function delegateToModuleView(address module) private view {
+         assembly {
+             // Construct optimized custom call data for `this.viewDelegate()`
+-            // [selector 4B][module address 32B][calldata with stripped proxy metadata][caller address 32B]
++            // [selector 4B][module address 32B][calldata with stripped proxy metadata][caller address 20B]
+             // Proxy metadata will be appended back by the proxy on staticcall
+             mstore(0, 0x1fe8b95300000000000000000000000000000000000000000000000000000000)
+-            mstore(4, module)
+             let strippedCalldataSize := sub(calldatasize(), PROXY_METADATA_LENGTH)
++            // we do the mstore first offset by -12 so the 20 address bytes align right behind 36 + strippedCalldataSize
++            // note that it can write into the module address if the calldata is less than 12 bytes, therefore write before we write module
++            mstore(add(24, strippedCalldataSize), caller())
++            mstore(4, module)
+             calldatacopy(36, 0, strippedCalldataSize)
+-            mstore(add(36, strippedCalldataSize), caller())
+-            // insize: stripped calldatasize + 36 (signature and module address) + 32 (caller address)
+-            let result := staticcall(gas(), address(), 0, add(strippedCalldataSize, 68), 0, 0)
++            // insize: stripped calldatasize + 36 (signature and module address) + 20 (caller address)
++            let result := staticcall(gas(), address(), 0, add(strippedCalldataSize, 56), 0, 0)
+             returndatacopy(0, 0, returndatasize())
+             switch result
+             case 0 { revert(0, returndatasize()) }
+@@ -129,12 +147,6 @@ abstract contract Dispatch is
+         }
+     }
+ 
+-    // Modifier ensures, that the body of the function is always executed from the EVC call.
+-    // It is accomplished by intercepting calls incoming directly to the vault and passing them
+-    // to the EVC.call function. EVC calls the vault back with original calldata. As a result, the account
+-    // and vault status checks are always executed in the checks deferral frame, at the end of the call,
+-    // outside of the vault's re-entrancy protections.
+-    // The modifier is applied to all functions which schedule account or vault status checks.
+     function callThroughEVCInternal() private {
+         address _evc = address(evc);
+         assembly {
+diff --git a/src/EVault/EVault.sol b/src/EVault/EVault.sol
+index 462f22e..d1149c2 100644
+--- a/src/EVault/EVault.sol
++++ b/src/EVault/EVault.sol
+@@ -5,9 +5,10 @@ pragma solidity ^0.8.0;
+ import {Dispatch} from "./Dispatch.sol";
+ 
+ /// @title EVault
++/// @custom:security-contact security@euler.xyz
+ /// @author Euler Labs (https://www.eulerlabs.com/)
+ /// @notice This contract implements an EVC enabled lending vault
+-/// @dev The responsibility of this contract is call routing. Select functions are embedded, while most are delegated to the modules.
++/// @dev The responsibility of this contract is call routing. Select functions are embedded, while most are delegated to the modules
+ contract EVault is Dispatch {
+     constructor(Integrations memory integrations, DeployedModules memory modules) Dispatch(integrations, modules) {}
+ 
+@@ -119,9 +120,7 @@ contract EVault is Dispatch {
+ 
+     function repay(uint256 amount, address receiver) public virtual override callThroughEVC use(MODULE_BORROWING) returns (uint256) {}
+ 
+-    function loop(uint256 amount, address sharesReceiver) public virtual override callThroughEVC use(MODULE_BORROWING) returns (uint256) {}
+-
+-    function deloop(uint256 amount, address debtFrom) public virtual override callThroughEVC use(MODULE_BORROWING) returns (uint256) {}
++    function repayWithShares(uint256 amount, address receiver) public virtual override callThroughEVC use(MODULE_BORROWING) returns (uint256 shares, uint256 debt) {}
+ 
+     function pullDebt(uint256 amount, address from) public virtual override callThroughEVC use(MODULE_BORROWING) returns (uint256) {}
+ 
+@@ -193,14 +192,18 @@ contract EVault is Dispatch {
+ 
+     function caps() public view virtual override useView(MODULE_GOVERNANCE) returns (uint16 supplyCap, uint16 borrowCap) {}
+ 
+-    function borrowingLTV(address collateral) public view virtual override useView(MODULE_GOVERNANCE) returns (uint16) {}
++    function LTVBorrow(address collateral) public view virtual override useView(MODULE_GOVERNANCE) returns (uint16) {}
+ 
+-    function liquidationLTV(address collateral) public view virtual override useView(MODULE_GOVERNANCE) returns (uint16) {}
++    function LTVLiquidation(address collateral) public view virtual override useView(MODULE_GOVERNANCE) returns (uint16) {}
+ 
+-    function LTVFull(address collateral) public view virtual override useView(MODULE_GOVERNANCE) returns (uint48 targetTimestamp, uint16 targetLTV, uint32 rampDuration, uint16 originalLTV) {}
++    function LTVFull(address collateral) public view virtual override useView(MODULE_GOVERNANCE) returns (uint16 borrowLTV, uint16 liquidationLTV, uint16 initialLiquidationLTV, uint48 targetTimestamp, uint32 rampDuration) {}
+ 
+     function LTVList() public view virtual override useView(MODULE_GOVERNANCE) returns (address[] memory) {}
+ 
++    function maxLiquidationDiscount() public view virtual override useView(MODULE_GOVERNANCE) returns (uint16) {}
++
++    function liquidationCoolOffTime() public view virtual override useView(MODULE_GOVERNANCE) returns (uint16) {}
++
+     function hookConfig() public view virtual override useView(MODULE_GOVERNANCE) returns (address, uint32) {}
+ 
+     function configFlags() public view virtual override useView(MODULE_GOVERNANCE) returns (uint32) {}
+@@ -216,20 +219,20 @@ contract EVault is Dispatch {
+ 
+     function convertFees() public virtual override callThroughEVC use(MODULE_GOVERNANCE) {}
+ 
+-    function setName(string calldata newName) public virtual override use(MODULE_GOVERNANCE) {}
+-
+-    function setSymbol(string calldata newSymbol) public virtual override use(MODULE_GOVERNANCE) {}
+-
+     function setGovernorAdmin(address newGovernorAdmin) public virtual override use(MODULE_GOVERNANCE) {}
+ 
+     function setFeeReceiver(address newFeeReceiver) public virtual override use(MODULE_GOVERNANCE) {}
+ 
+     function setHookConfig(address newHookTarget, uint32 newHookedOps) public virtual override use(MODULE_GOVERNANCE) {}
+ 
+-    function setLTV(address collateral, uint16 ltv, uint32 rampDuration) public virtual override use(MODULE_GOVERNANCE) {}
++    function setLTV(address collateral, uint16 borrowLTV, uint16 liquidationLTV, uint32 rampDuration) public virtual override use(MODULE_GOVERNANCE) {}
+ 
+     function clearLTV(address collateral) public virtual override use(MODULE_GOVERNANCE) {}
+ 
++    function setMaxLiquidationDiscount(uint16 newDiscount) public virtual override use(MODULE_GOVERNANCE) {}
++
++    function setLiquidationCoolOffTime(uint16 newCoolOffTime) public virtual override use(MODULE_GOVERNANCE) {}
++
+     function setInterestRateModel(address newModel) public virtual override use(MODULE_GOVERNANCE) {}
+ 
+     function setConfigFlags(uint32 newConfigFlags) public virtual override use(MODULE_GOVERNANCE) {}
+diff --git a/src/EVault/IEVault.sol b/src/EVault/IEVault.sol
+index 16801fb..9b53c53 100644
+--- a/src/EVault/IEVault.sol
++++ b/src/EVault/IEVault.sol
+@@ -1,6 +1,6 @@
+ // SPDX-License-Identifier: GPL-2.0-or-later
+ 
+-pragma solidity ^0.8.0;
++pragma solidity >=0.8.0;
+ 
+ import {IVault as IEVCVault} from "ethereum-vault-connector/interfaces/IVault.sol";
+ 
+@@ -18,39 +18,49 @@ interface IInitialize {
+ /// @notice Interface of the EVault's Initialize module
+ interface IERC20 {
+     /// @notice Vault share token (eToken) name, ie "Euler Vault: DAI"
++    /// @return The name of the eToken
+     function name() external view returns (string memory);
+ 
+     /// @notice Vault share token (eToken) symbol, ie "eDAI"
++    /// @return The symbol of the eToken
+     function symbol() external view returns (string memory);
+ 
+-    /// @notice Decimals, always normalised to 18
++    /// @notice Decimals, the same as the asset's or 18 if the asset doesn't implement `decimals()`
++    /// @return The decimals of the eToken
+     function decimals() external view returns (uint8);
+ 
+     /// @notice Sum of all eToken balances
++    /// @return The total supply of the eToken
+     function totalSupply() external view returns (uint256);
+ 
+     /// @notice Balance of a particular account, in eTokens
++    /// @param account Address to query
++    /// @return The balance of the account
+     function balanceOf(address account) external view returns (uint256);
+ 
+     /// @notice Retrieve the current allowance
+     /// @param holder The account holding the eTokens
+     /// @param spender Trusted address
++    /// @return The allowance from holder for spender
+     function allowance(address holder, address spender) external view returns (uint256);
+ 
+     /// @notice Transfer eTokens to another address
+     /// @param to Recipient account
+     /// @param amount In shares.
++    /// @return True if transfer succeeded
+     function transfer(address to, uint256 amount) external returns (bool);
+ 
+     /// @notice Transfer eTokens from one address to another
+     /// @param from This address must've approved the to address
+     /// @param to Recipient account
+     /// @param amount In shares
++    /// @return True if transfer succeeded
+     function transferFrom(address from, address to, uint256 amount) external returns (bool);
+ 
+     /// @notice Allow spender to access an amount of your eTokens
+     /// @param spender Trusted address
+     /// @param amount Use max uint for "infinite" allowance
++    /// @return True if approval succeeded
+     function approve(address spender, uint256 amount) external returns (bool);
+ }
+ 
+@@ -60,25 +70,34 @@ interface IToken is IERC20 {
+     /// @notice Transfer the full eToken balance of an address to another
+     /// @param from This address must've approved the to address
+     /// @param to Recipient account
++    /// @return True if transfer succeeded
+     function transferFromMax(address from, address to) external returns (bool);
+ }
+ 
+ /// @title IERC4626
+ /// @notice Interface of an ERC4626 vault
+ interface IERC4626 {
+-    /// @notice Vault underlying asset
++    /// @notice Vault's underlying asset
++    /// @return The vault's underlying asset
+     function asset() external view returns (address);
+ 
+-    /// @notice Total amount of managed assets
++    /// @notice Total amount of managed assets, cash and borrows
++    /// @return The total amount of assets
+     function totalAssets() external view returns (uint256);
+ 
+     /// @notice Calculate amount of assets corresponding to the requested shares amount
++    /// @param shares Amount of shares to convert
++    /// @return The amount of assets
+     function convertToAssets(uint256 shares) external view returns (uint256);
+ 
+     /// @notice Calculate amount of shares corresponding to the requested assets amount
++    /// @param assets Amount of assets to convert
++    /// @return The amount of shares
+     function convertToShares(uint256 assets) external view returns (uint256);
+ 
+     /// @notice Fetch the maximum amount of assets a user can deposit
++    /// @param account Address to query
++    /// @return The max amount of assets the account can deposit
+     function maxDeposit(address account) external view returns (uint256);
+ 
+     /// @notice Calculate an amount of shares that would be created by depositing assets
+@@ -87,6 +106,8 @@ interface IERC4626 {
+     function previewDeposit(uint256 assets) external view returns (uint256);
+ 
+     /// @notice Fetch the maximum amount of shares a user can mint
++    /// @param account Address to query
++    /// @return The max amount of shares the account can mint
+     function maxMint(address account) external view returns (uint256);
+ 
+     /// @notice Calculate an amount of assets that would be required to mint requested amount of shares
+@@ -145,13 +166,16 @@ interface IERC4626 {
+ /// @title IVault
+ /// @notice Interface of the EVault's Vault module
+ interface IVault is IERC4626 {
+-    /// @notice Balance of the fees accumulator, in eTokens
++    /// @notice Balance of the fees accumulator, in shares
++    /// @return The accumulated fees in shares
+     function accumulatedFees() external view returns (uint256);
+ 
+     /// @notice Balance of the fees accumulator, in underlying units
++    /// @return The accumulated fees in asset units
+     function accumulatedFeesAssets() external view returns (uint256);
+ 
+     /// @notice Address of the original vault creator
++    /// @return The address of the creator
+     function creator() external view returns (address);
+ 
+     /// @notice Creates shares for the receiver, from excess asset balances of the vault (not accounted for in `cash`)
+@@ -166,18 +190,25 @@ interface IVault is IERC4626 {
+ /// @notice Interface of the EVault's Borrowing module
+ interface IBorrowing {
+     /// @notice Sum of all outstanding debts, in underlying units (increases as interest is accrued)
++    /// @return The total borrows in asset units
+     function totalBorrows() external view returns (uint256);
+ 
+     /// @notice Sum of all outstanding debts, in underlying units scaled up by shifting INTERNAL_DEBT_PRECISION_SHIFT bits
++    /// @return The total borrows in internal debt precision
+     function totalBorrowsExact() external view returns (uint256);
+ 
+     /// @notice Balance of vault assets as tracked by deposits/withdrawals and borrows/repays
++    /// @return The amount of assets the vault tracks as current direct holdings
+     function cash() external view returns (uint256);
+ 
+     /// @notice Debt owed by a particular account, in underlying units
++    /// @param account Address to query
++    /// @return The debt of the account in asset units
+     function debtOf(address account) external view returns (uint256);
+ 
+     /// @notice Debt owed by a particular account, in underlying units scaled up by shifting INTERNAL_DEBT_PRECISION_SHIFT bits
++    /// @param account Address to query
++    /// @return The debt of the account in internal precision
+     function debtOfExact(address account) external view returns (uint256);
+ 
+     /// @notice Retrieves the current interest rate for an asset
+@@ -188,7 +219,8 @@ interface IBorrowing {
+     /// @return An opaque accumulator that increases as interest is accrued
+     function interestAccumulator() external view returns (uint256);
+ 
+-    /// @notice Address of the sidecar DToken
++    /// @notice Returns an address of the sidecar DToken
++    /// @return The address of the DToken
+     function dToken() external view returns (address);
+ 
+     /// @notice Transfer underlying tokens from the vault to the sender, and increase sender's debt
+@@ -203,20 +235,13 @@ interface IBorrowing {
+     /// @return Amount of assets repaid
+     function repay(uint256 amount, address receiver) external returns (uint256);
+ 
+-    /// @notice Mint shares and a corresponding amount of debt ("self-borrow")
+-    /// @param amount In asset units
+-    /// @param sharesReceiver Account to receive the created shares
+-    /// @return Amount of shares created
+-    /// @dev Equivalent to looping borrows and deposits
+-    /// @dev The amount requested will be adjusted up when creating debt, to precisely match the exchange rate with shares minted
+-    function loop(uint256 amount, address sharesReceiver) external returns (uint256);
+-
+     /// @notice Pay off liability with shares ("self-repay")
+-    /// @param amount In asset units (use max uint256 to repay the debt in full or up to the available underlying balance)
+-    /// @param debtFrom Account to remove debt from by burning sender's shares
+-    /// @return Amount of shares burned
+-    /// @dev Equivalent to withdrawing and repaying
+-    function deloop(uint256 amount, address debtFrom) external returns (uint256);
++    /// @param amount In asset units (use max uint256 to repay the debt in full or up to the available deposit)
++    /// @param receiver Account to remove debt from by burning sender's shares
++    /// @return shares Amount of shares burned
++    /// @return debt Amount of debt removed in assets
++    /// @dev Equivalent to withdrawing and repaying, but no assets are needed to be present in the vault
++    function repayWithShares(uint256 amount, address receiver) external returns (uint256 shares, uint256 debt);
+ 
+     /// @notice Take over debt from another account
+     /// @param amount Amount of debt in asset units (use max uint256 for all the account's debt)
+@@ -298,9 +323,12 @@ interface IRiskManager is IEVCVault {
+ /// @notice Interface of the EVault's BalanceForwarder module
+ interface IBalanceForwarder {
+     /// @notice Retrieve the address of rewards contract, tracking changes in account's balances
++    /// @return The balance tracker address
+     function balanceTrackerAddress() external view returns (address);
+ 
+     /// @notice Retrieves boolean indicating if the account opted in to forward balance changes to the rewards contract
++    /// @param account Address to query
++    /// @return True if balance forwarder is enabled
+     function balanceForwarderEnabled(address account) external view returns (bool);
+ 
+     /// @notice Enables balance forwarding for the authenticated account
+@@ -318,9 +346,11 @@ interface IBalanceForwarder {
+ /// @notice Interface of the EVault's Governance module
+ interface IGovernance {
+     /// @notice Retrieves the address of the governor
++    /// @return The governor address
+     function governorAdmin() external view returns (address);
+ 
+     /// @notice Retrieves address of the governance fee receiver
++    /// @return The fee receiver address
+     function feeReceiver() external view returns (address);
+ 
+     /// @notice Retrieves the interest fee in effect for the vault
+@@ -332,6 +362,7 @@ interface IGovernance {
+     function interestRateModel() external view returns (address);
+ 
+     /// @notice Retrieves the ProtocolConfig address
++    /// @return The protocol config address
+     function protocolConfigAddress() external view returns (address);
+ 
+     /// @notice Retrieves the protocol fee share
+@@ -339,94 +370,139 @@ interface IGovernance {
+     function protocolFeeShare() external view returns (uint256);
+ 
+     /// @notice Retrieves the address which will receive protocol's fees
++    /// @notice The protocol fee receiver address
+     function protocolFeeReceiver() external view returns (address);
+ 
+     /// @notice Retrieves supply and borrow caps in AmountCap format
++    /// @return supplyCap The supply cap in AmountCap format
++    /// @return borrowCap The borrow cap in AmountCap format
+     function caps() external view returns (uint16 supplyCap, uint16 borrowCap);
+ 
+-    /// @notice Retrieves regular LTV, set for the collateral, which is used to determine the health of the account
+-    function borrowingLTV(address collateral) external view returns (uint16);
++    /// @notice Retrieves the borrow LTV of the collateral, which is used to determine if the account is healthy during account status checks.
++    /// @param collateral The address of the collateral to query
++    /// @return Borrowing LTV in 1e4 scale
++    function LTVBorrow(address collateral) external view returns (uint16);
+ 
+-    /// @notice Retrieves current ramped value of LTV, which is used to determine liquidation penalty
+-    function liquidationLTV(address collateral) external view returns (uint16);
++    /// @notice Retrieves the current liquidation LTV, which is used to determine if the account is eligible for liquidation
++    /// @param collateral The address of the collateral to query
++    /// @return Liquidation LTV in 1e4 scale
++    function LTVLiquidation(address collateral) external view returns (uint16);
+ 
+-    /// @notice Retrieves LTV detailed config for a collateral
++    /// @notice Retrieves LTV configuration for the collateral
+     /// @param collateral Collateral asset
+-    /// @return targetTimestamp the timestamp when the ramp ends
+-    /// @return targetLTV current regular LTV or target LTV that the ramped LTV will reach after ramp is over
+-    /// @return rampDuration ramp duration in seconds
+-    /// @return originalLTV previous LTV value, where the ramp starts
++    /// @return borrowLTV The current value of borrow LTV for originating positions
++    /// @return liquidationLTV The value of fully converged liquidation LTV
++    /// @return initialLiquidationLTV The initial value of the liquidation LTV, when the ramp began
++    /// @return targetTimestamp The timestamp when the liquidation LTV is considered fully converged
++    /// @return rampDuration The time it takes for the liquidation LTV to converge from the initial value to the fully converged value
+     function LTVFull(address collateral)
+         external
+         view
+-        returns (uint48 targetTimestamp, uint16 targetLTV, uint32 rampDuration, uint16 originalLTV);
++        returns (
++            uint16 borrowLTV,
++            uint16 liquidationLTV,
++            uint16 initialLiquidationLTV,
++            uint48 targetTimestamp,
++            uint32 rampDuration
++        );
+ 
+     /// @notice Retrieves a list of collaterals with configured LTVs
+     /// @return List of asset collaterals
+-    /// @dev The list can have duplicates. Returned assets could have the ltv disabled (set to zero)
++    /// @dev Returned assets could have the ltv disabled (set to zero)
+     function LTVList() external view returns (address[] memory);
+ 
+-    /// @notice Retrieves a hook target and a bitmask indicating which operations call the hook target.
+-    function hookConfig() external view returns (address, uint32);
++    /// @notice Retrieves the maximum liquidation discount
++    /// @return The maximum liquidation discount in 1e4 scale
++    function maxLiquidationDiscount() external view returns (uint16);
++
++    /// @notice Retrieves liquidation cool-off time, which must elapse after successful account status check before account can be liquidated
++    /// @return The liquidation cool off time in seconds
++    function liquidationCoolOffTime() external view returns (uint16);
++
++    /// @notice Retrieves a hook target and a bitmask indicating which operations call the hook target
++    /// @return hookTarget Address of the hook target contract
++    /// @return hookedOps Bitmask with operations that should call the hooks. See Constants.sol for a list of operations
++    function hookConfig() external view returns (address hookTarget, uint32 hookedOps);
+ 
+-    /// @notice Retrieves a bitmask indicating enabled config flags.
++    /// @notice Retrieves a bitmask indicating enabled config flags
++    /// @return Bitmask with config flags enabled
+     function configFlags() external view returns (uint32);
+ 
+     /// @notice Address of EthereumVaultConnector contract
++    /// @return The EVC address
+     function EVC() external view returns (address);
+ 
+     /// @notice Retrieves a reference asset used for liquidity calculations
++    /// @return The address of the reference asset
+     function unitOfAccount() external view returns (address);
+ 
+     /// @notice Retrieves the address of the oracle contract
++    /// @return The address of the oracle
+     function oracle() external view returns (address);
+ 
+     /// @notice Retrieves the Permit2 contract address
++    /// @return The address of the Permit2 contract
+     function permit2Address() external view returns (address);
+ 
+     /// @notice Splits accrued fees balance according to protocol fee share and transfers shares to the governor fee receiver and protocol fee receiver
+     function convertFees() external;
+ 
+-    /// @notice Set a new eToken name
+-    function setName(string calldata newName) external;
+-
+-    /// @notice Set a new eToken symbol
+-    function setSymbol(string calldata newSymbol) external;
+-
+     /// @notice Set a new governor address
++    /// @param newGovernorAdmin The new governor address
++    /// @dev Set to zero address to renounce privileges and make the vault non-governed
+     function setGovernorAdmin(address newGovernorAdmin) external;
+ 
+     /// @notice Set a new governor fee receiver address
++    /// @param newFeeReceiver The new fee receiver address
+     function setFeeReceiver(address newFeeReceiver) external;
+ 
+     /// @notice Set a new LTV config
+     /// @param collateral Address of collateral to set LTV for
+-    /// @param ltv New LTV in 1e4 scale
++    /// @param borrowLTV New borrow LTV, for assessing account's health during account status checks, in 1e4 scale
++    /// @param liquidationLTV New liquidation LTV after ramp ends in 1e4 scale
+     /// @param rampDuration Ramp duration in seconds
+-    function setLTV(address collateral, uint16 ltv, uint32 rampDuration) external;
++    function setLTV(address collateral, uint16 borrowLTV, uint16 liquidationLTV, uint32 rampDuration) external;
+ 
+     /// @notice Completely clears LTV configuratrion, signalling the collateral is not considered safe to liquidate anymore
+-    /// @param collateral Address of collateral
++    /// @param collateral Address of the collateral
+     function clearLTV(address collateral) external;
+ 
++    /// @notice Set a new maximum liquidation discount
++    /// @param newDiscount New maximum liquidation discount in 1e4 scale
++    /// @dev If the discount is zero (the default), the liquidators will not be incentivized to liquidate unhealthy accounts
++    function setMaxLiquidationDiscount(uint16 newDiscount) external;
++
++    /// @notice Set a new liquidation cool off time, which must elapse after successful account status check before account can be liquidated
++    /// @param newCoolOffTime The new liquidation cool off time in seconds
++    /// @dev Setting cool off time to zero allows liquidating the account in the same block as the last successful account status check
++    function setLiquidationCoolOffTime(uint16 newCoolOffTime) external;
++
+     /// @notice Set a new interest rate model contract
+-    /// @param newModel Address of the contract
++    /// @param newModel The new IRM address
+     function setInterestRateModel(address newModel) external;
+ 
+     /// @notice Set a new hook target and a new bitmap indicating which operations should call the hook target. Operations are defined in Constants.sol
++    /// @param newHookTarget The new hook target address
++    /// @param newHookedOps Bitmask with the new hooked operations
+     function setHookConfig(address newHookTarget, uint32 newHookedOps) external;
+ 
+     /// @notice Set new bitmap indicating which config flags should be enabled. Flags are defined in Constants.sol
++    /// @param newConfigFlags Bitmask with the new config flags
+     function setConfigFlags(uint32 newConfigFlags) external;
+ 
+     /// @notice Set new supply and borrow caps in AmountCap format
++    /// @param supplyCap The new supply cap in AmountCap fromat
++    /// @param borrowCap The new borrow cap in AmountCap fromat
+     function setCaps(uint16 supplyCap, uint16 borrowCap) external;
+ 
+     /// @notice Set a new interest fee
++    /// @param newFee The new interest fee
+     function setInterestFee(uint16 newFee) external;
+ }
+ 
+ /// @title IEVault
++/// @custom:security-contact security@euler.xyz
++/// @author Euler Labs (https://www.eulerlabs.com/)
+ /// @notice Interface of the EVault, an EVC enabled lending vault
+ interface IEVault is
+     IInitialize,
+diff --git a/src/EVault/modules/BalanceForwarder.sol b/src/EVault/modules/BalanceForwarder.sol
+index 6009fce..3ab5598 100644
+--- a/src/EVault/modules/BalanceForwarder.sol
++++ b/src/EVault/modules/BalanceForwarder.sol
+@@ -8,8 +8,9 @@ import {Base} from "../shared/Base.sol";
+ import "../shared/types/Types.sol";
+ 
+ /// @title BalanceForwarderModule
++/// @custom:security-contact security@euler.xyz
+ /// @author Euler Labs (https://www.eulerlabs.com/)
+-/// @notice An EVault module handling communication a with balance tracker contract.
++/// @notice An EVault module handling communication with a balance tracker contract.
+ abstract contract BalanceForwarderModule is IBalanceForwarder, Base {
+     /// @inheritdoc IBalanceForwarder
+     function balanceTrackerAddress() public view virtual reentrantOK returns (address) {
+@@ -23,7 +24,7 @@ abstract contract BalanceForwarderModule is IBalanceForwarder, Base {
+ 
+     /// @inheritdoc IBalanceForwarder
+     function enableBalanceForwarder() public virtual nonReentrant {
+-        if (address(balanceTracker) == address(0)) revert E_BalanceForwarderUnsupported();
++        if (address(balanceTracker) == address(0)) revert E_NotSupported();
+ 
+         address account = EVCAuthenticate();
+         UserStorage storage user = vaultStorage.users[account];
+@@ -38,7 +39,7 @@ abstract contract BalanceForwarderModule is IBalanceForwarder, Base {
+ 
+     /// @inheritdoc IBalanceForwarder
+     function disableBalanceForwarder() public virtual nonReentrant {
+-        if (address(balanceTracker) == address(0)) revert E_BalanceForwarderUnsupported();
++        if (address(balanceTracker) == address(0)) revert E_NotSupported();
+ 
+         address account = EVCAuthenticate();
+         UserStorage storage user = vaultStorage.users[account];
+diff --git a/src/EVault/modules/Borrowing.sol b/src/EVault/modules/Borrowing.sol
+index 93e87b7..4d31872 100644
+--- a/src/EVault/modules/Borrowing.sol
++++ b/src/EVault/modules/Borrowing.sol
+@@ -14,9 +14,10 @@ import {IFlashLoan} from "../../interfaces/IFlashLoan.sol";
+ import "../shared/types/Types.sol";
+ 
+ /// @title BorrowingModule
++/// @custom:security-contact security@euler.xyz
+ /// @author Euler Labs (https://www.eulerlabs.com/)
+ /// @notice An EVault module handling borrowing and repaying of vault assets
+-abstract contract BorrowingModule is IBorrowing, Base, AssetTransfers, BalanceUtils, LiquidityUtils {
++abstract contract BorrowingModule is IBorrowing, AssetTransfers, BalanceUtils, LiquidityUtils {
+     using TypesLib for uint256;
+     using SafeERC20Lib for IERC20;
+ 
+@@ -93,34 +94,11 @@ abstract contract BorrowingModule is IBorrowing, Base, AssetTransfers, BalanceUt
+     }
+ 
+     /// @inheritdoc IBorrowing
+-    function loop(uint256 amount, address sharesReceiver) public virtual nonReentrant returns (uint256) {
+-        (VaultCache memory vaultCache, address account) = initOperation(OP_LOOP, CHECKACCOUNT_CALLER);
++    function repayWithShares(uint256 amount, address receiver) public virtual nonReentrant returns (uint256, uint256) {
++        (VaultCache memory vaultCache, address account) = initOperation(OP_REPAY_WITH_SHARES, CHECKACCOUNT_CALLER);
+ 
+-        Assets assets = amount.toAssets();
+-        if (assets.isZero()) return 0;
+-
+-        // The debt and shares minted should match the current exchange rate from shares to assets.
+-        // First round the requested amount up to shares, to avoid zero shares.
+-        // Next convert back to assets, again rounding up the debt in favor of the vault.
+-        // As a result the amount of debt minted can be greater than amount requested.
+-        Shares shares = assets.toSharesUp(vaultCache);
+-        assets = shares.toAssetsUp(vaultCache);
+-
+-        // Mint DTokens
+-        increaseBorrow(vaultCache, account, assets);
+-
+-        // Mint ETokens
+-        increaseBalance(vaultCache, sharesReceiver, account, shares, assets);
+-
+-        return shares.toUint();
+-    }
+-
+-    /// @inheritdoc IBorrowing
+-    function deloop(uint256 amount, address debtFrom) public virtual nonReentrant returns (uint256) {
+-        (VaultCache memory vaultCache, address account) = initOperation(OP_DELOOP, CHECKACCOUNT_CALLER);
+-
+-        Assets owed = getCurrentOwed(vaultCache, debtFrom).toAssetsUp();
+-        if (owed.isZero()) return 0;
++        Assets owed = getCurrentOwed(vaultCache, receiver).toAssetsUp();
++        if (owed.isZero()) return (0, 0);
+ 
+         Assets assets;
+         Shares shares;
+@@ -133,7 +111,7 @@ abstract contract BorrowingModule is IBorrowing, Base, AssetTransfers, BalanceUt
+             shares = assets.toSharesUp(vaultCache);
+         }
+ 
+-        if (assets.isZero()) return 0;
++        if (assets.isZero()) return (0, 0);
+ 
+         if (assets > owed) {
+             assets = owed;
+@@ -144,9 +122,9 @@ abstract contract BorrowingModule is IBorrowing, Base, AssetTransfers, BalanceUt
+         decreaseBalance(vaultCache, account, account, account, shares, assets);
+ 
+         // Burn DTokens
+-        decreaseBorrow(vaultCache, debtFrom, assets);
++        decreaseBorrow(vaultCache, receiver, assets);
+ 
+-        return shares.toUint();
++        return (shares.toUint(), assets.toUint());
+     }
+ 
+     /// @inheritdoc IBorrowing
+diff --git a/src/EVault/modules/Governance.sol b/src/EVault/modules/Governance.sol
+index dfce909..0b5ade0 100644
+--- a/src/EVault/modules/Governance.sol
++++ b/src/EVault/modules/Governance.sol
+@@ -14,9 +14,10 @@ import {ProxyUtils} from "../shared/lib/ProxyUtils.sol";
+ import "../shared/types/Types.sol";
+ 
+ /// @title GovernanceModule
++/// @custom:security-contact security@euler.xyz
+ /// @author Euler Labs (https://www.eulerlabs.com/)
+ /// @notice An EVault module handling governance, including configuration and fees
+-abstract contract GovernanceModule is IGovernance, Base, BalanceUtils, BorrowUtils, LTVUtils {
++abstract contract GovernanceModule is IGovernance, BalanceUtils, BorrowUtils, LTVUtils {
+     using TypesLib for uint16;
+ 
+     // Protocol guarantees for the governor
+@@ -30,21 +31,62 @@ abstract contract GovernanceModule is IGovernance, Base, BalanceUtils, BorrowUti
+     // Higher bound of the guaranteed range
+     uint16 internal constant GUARANTEED_INTEREST_FEE_MAX = 1e4;
+ 
+-    event GovSetName(string newName);
+-    event GovSetSymbol(string newSymbol);
++    /// @notice Set a governor address for the EVault
++    /// @param newGovernorAdmin Address of the new governor
+     event GovSetGovernorAdmin(address indexed newGovernorAdmin);
++
++    /// @notice Set a fee receiver address
++    /// @param newFeeReceiver Address of the new fee receiver
+     event GovSetFeeReceiver(address indexed newFeeReceiver);
++
++    /// @notice Set new LTV configuration for a collateral
++    /// @param collateral Address of the collateral
++    /// @param borrowLTV The new LTV for the collateral, used to determine health of the account during regular operations, in 1e4 scale
++    /// @param liquidationLTV The new LTV for the collateral, used to determine health of the account during liquidations, in 1e4 scale
++    /// @param initialLiquidationLTV The previous liquidation LTV at the moment a new configuration was set
++    /// @param targetTimestamp If the LTV is lowered, the timestamp when the ramped liquidation LTV will merge with the `targetLTV`
++    /// @param rampDuration If the LTV is lowered, duration in seconds, during which the liquidation LTV will be merging with `targetLTV`
+     event GovSetLTV(
+-        address indexed collateral, uint48 targetTimestamp, uint16 targetLTV, uint32 rampDuration, uint16 originalLTV
++        address indexed collateral,
++        uint16 borrowLTV,
++        uint16 liquidationLTV,
++        uint16 initialLiquidationLTV,
++        uint48 targetTimestamp,
++        uint32 rampDuration,
++        bool initialized
+     );
+-    event GovSetInterestRateModel(address interestRateModel);
++    /// @notice Set an interest rate model contract address
++    /// @param newInterestRateModel Address of the new IRM
++    event GovSetInterestRateModel(address newInterestRateModel);
++
++    /// @notice Set a maximum liquidation discount
++    /// @param newDiscount The new maximum liquidation discount in 1e4 scale
++    event GovSetMaxLiquidationDiscount(uint16 newDiscount);
++
++    /// @notice Set a new liquidation cool off time, which must elapse after successful account status check, before account can be liquidated
++    /// @param newCoolOffTime The new liquidation cool off time in seconds
++    event GovSetLiquidationCoolOffTime(uint16 newCoolOffTime);
++
++    /// @notice Set new hooks configuration
++    /// @param newHookTarget Address of the new hook target contract
++    /// @param newHookedOps A bitfield of operations to be hooked. See Constants.sol for a list of operations
+     event GovSetHookConfig(address indexed newHookTarget, uint32 newHookedOps);
++
++    /// @notice Set new configuration flags
++    /// @param newConfigFlags New configuration flags. See Constants.sol for a list of configuration flags
+     event GovSetConfigFlags(uint32 newConfigFlags);
++
++    /// @notice Set new caps
++    /// @param newSupplyCap New supply cap in AmountCap format
++    /// @param newBorrowCap New borrow cap in AmountCap format
+     event GovSetCaps(uint16 newSupplyCap, uint16 newBorrowCap);
++
++    /// @notice Set new interest fee
++    /// @param newFee New interest fee as percentage in 1e4 scale
+     event GovSetInterestFee(uint16 newFee);
+ 
+     modifier governorOnly() {
+-        if (msg.sender != vaultStorage.governorAdmin) revert E_Unauthorized();
++        if (vaultStorage.governorAdmin != EVCAuthenticateGovernor()) revert E_Unauthorized();
+         _;
+     }
+ 
+@@ -91,19 +133,31 @@ abstract contract GovernanceModule is IGovernance, Base, BalanceUtils, BorrowUti
+     }
+ 
+     /// @inheritdoc IGovernance
+-    function borrowingLTV(address collateral) public view virtual reentrantOK returns (uint16) {
++    function LTVBorrow(address collateral) public view virtual reentrantOK returns (uint16) {
+         return getLTV(collateral, false).toUint16();
+     }
+ 
+     /// @inheritdoc IGovernance
+-    function liquidationLTV(address collateral) public view virtual reentrantOK returns (uint16) {
++    function LTVLiquidation(address collateral) public view virtual reentrantOK returns (uint16) {
+         return getLTV(collateral, true).toUint16();
+     }
+ 
+     /// @inheritdoc IGovernance
+-    function LTVFull(address collateral) public view virtual reentrantOK returns (uint48, uint16, uint32, uint16) {
++    function LTVFull(address collateral)
++        public
++        view
++        virtual
++        reentrantOK
++        returns (uint16, uint16, uint16, uint48, uint32)
++    {
+         LTVConfig memory ltv = vaultStorage.ltvLookup[collateral];
+-        return (ltv.targetTimestamp, ltv.targetLTV.toUint16(), ltv.rampDuration, ltv.originalLTV.toUint16());
++        return (
++            ltv.borrowLTV.toUint16(),
++            ltv.liquidationLTV.toUint16(),
++            ltv.initialLiquidationLTV.toUint16(),
++            ltv.targetTimestamp,
++            ltv.rampDuration
++        );
+     }
+ 
+     /// @inheritdoc IGovernance
+@@ -111,6 +165,16 @@ abstract contract GovernanceModule is IGovernance, Base, BalanceUtils, BorrowUti
+         return vaultStorage.ltvList;
+     }
+ 
++    /// @inheritdoc IGovernance
++    function maxLiquidationDiscount() public view virtual reentrantOK returns (uint16) {
++        return vaultStorage.maxLiquidationDiscount.toUint16();
++    }
++
++    /// @inheritdoc IGovernance
++    function liquidationCoolOffTime() public view virtual reentrantOK returns (uint16) {
++        return vaultStorage.liquidationCoolOffTime;
++    }
++
+     /// @inheritdoc IGovernance
+     function hookConfig() public view virtual reentrantOK returns (address, uint32) {
+         return (vaultStorage.hookTarget, vaultStorage.hookedOps.toUint32());
+@@ -178,18 +242,6 @@ abstract contract GovernanceModule is IGovernance, Base, BalanceUtils, BorrowUti
+         emit ConvertFees(account, protocolReceiver, governorReceiver, protocolShares.toUint(), governorShares.toUint());
+     }
+ 
+-    /// @inheritdoc IGovernance
+-    function setName(string calldata newName) public virtual nonReentrant governorOnly {
+-        vaultStorage.name = newName;
+-        emit GovSetName(newName);
+-    }
+-
+-    /// @inheritdoc IGovernance
+-    function setSymbol(string calldata newSymbol) public virtual nonReentrant governorOnly {
+-        vaultStorage.symbol = newSymbol;
+-        emit GovSetSymbol(newSymbol);
+-    }
+-
+     /// @inheritdoc IGovernance
+     function setGovernorAdmin(address newGovernorAdmin) public virtual nonReentrant governorOnly {
+         vaultStorage.governorAdmin = newGovernorAdmin;
+@@ -203,28 +255,49 @@ abstract contract GovernanceModule is IGovernance, Base, BalanceUtils, BorrowUti
+     }
+ 
+     /// @inheritdoc IGovernance
+-    function setLTV(address collateral, uint16 ltv, uint32 rampDuration) public virtual nonReentrant governorOnly {
++    /// @dev When the collateral asset is no longer deemed suitable to sustain debt (and not because of code issues, see `clearLTV`),
++    /// its LTV setting can be set to 0. Setting a zero liquidation LTV also enforces a zero borrowing LTV (`newBorrowLTV <= newLiquidationLTV`).
++    /// In such cases, the collateral becomes immediately ineffective for new borrows. However, for liquidation purposes, the LTV can be ramped down
++    /// over a period of time (`rampDuration`). This ramping helps users avoid hard liquidations with maximum discounts and gives them a chance to
++    /// close their positions in an orderly fashion. The choice of `rampDuration` depends on market conditions assessed by the governor.
++    /// They may decide to forgo the ramp entirely by setting the duration to zero, presumably in light of extreme market conditions, where ramping
++    /// would pose a threat to the vault's solvency.
++    /// In any case, when the liquidation LTV reaches its target of 0, this asset will no longer support the debt, but it will still be possible to
++    /// liquidate it at a discount and use the proceeds to repay an unhealthy loan.
++    function setLTV(address collateral, uint16 borrowLTV, uint16 liquidationLTV, uint32 rampDuration)
++        public
++        virtual
++        nonReentrant
++        governorOnly
++    {
+         // self-collateralization is not allowed
+         if (collateral == address(this)) revert E_InvalidLTVAsset();
+ 
+-        ConfigAmount newLTVAmount = ltv.toConfigAmount();
+-        LTVConfig memory origLTV = vaultStorage.ltvLookup[collateral];
++        ConfigAmount newBorrowLTV = borrowLTV.toConfigAmount();
++        ConfigAmount newLiquidationLTV = liquidationLTV.toConfigAmount();
++
++        // The borrow LTV must be lower than or equal to the the converged liquidation LTV
++        if (newBorrowLTV > newLiquidationLTV) revert E_LTVBorrow();
+ 
+-        // If new LTV is higher than the previous, or the same, it should take effect immediately
+-        if (newLTVAmount >= origLTV.getLTV(true) && rampDuration > 0) revert E_LTVRamp();
++        LTVConfig memory currentLTV = vaultStorage.ltvLookup[collateral];
+ 
+-        LTVConfig memory newLTV = origLTV.setLTV(newLTVAmount, rampDuration);
++        // If new LTV is higher or equal to current, as per ramping configuration, it should take effect immediately
++        if (newLiquidationLTV >= currentLTV.getLTV(true) && rampDuration > 0) revert E_LTVLiquidation();
++
++        LTVConfig memory newLTV = currentLTV.setLTV(newBorrowLTV, newLiquidationLTV, rampDuration);
+ 
+         vaultStorage.ltvLookup[collateral] = newLTV;
+ 
+-        if (!origLTV.initialized) vaultStorage.ltvList.push(collateral);
++        if (!currentLTV.initialized) vaultStorage.ltvList.push(collateral);
+ 
+         emit GovSetLTV(
+             collateral,
++            newLTV.borrowLTV.toUint16(),
++            newLTV.liquidationLTV.toUint16(),
++            newLTV.initialLiquidationLTV.toUint16(),
+             newLTV.targetTimestamp,
+-            newLTV.targetLTV.toUint16(),
+             newLTV.rampDuration,
+-            newLTV.originalLTV.toUint16()
++            !currentLTV.initialized
+         );
+     }
+ 
+@@ -236,7 +309,19 @@ abstract contract GovernanceModule is IGovernance, Base, BalanceUtils, BorrowUti
+         uint16 originalLTV = getLTV(collateral, true).toUint16();
+         vaultStorage.ltvLookup[collateral].clear();
+ 
+-        emit GovSetLTV(collateral, 0, 0, 0, originalLTV);
++        emit GovSetLTV(collateral, 0, 0, originalLTV, 0, 0, false);
++    }
++
++    /// @inheritdoc IGovernance
++    function setMaxLiquidationDiscount(uint16 newDiscount) public virtual nonReentrant governorOnly {
++        vaultStorage.maxLiquidationDiscount = newDiscount.toConfigAmount();
++        emit GovSetMaxLiquidationDiscount(newDiscount);
++    }
++
++    /// @inheritdoc IGovernance
++    function setLiquidationCoolOffTime(uint16 newCoolOffTime) public virtual nonReentrant governorOnly {
++        vaultStorage.liquidationCoolOffTime = newCoolOffTime;
++        emit GovSetLiquidationCoolOffTime(newCoolOffTime);
+     }
+ 
+     /// @inheritdoc IGovernance
+@@ -260,6 +345,8 @@ abstract contract GovernanceModule is IGovernance, Base, BalanceUtils, BorrowUti
+                 && IHookTarget(newHookTarget).isHookTarget() != IHookTarget.isHookTarget.selector
+         ) revert E_NotHookTarget();
+ 
++        if (newHookedOps >= OP_MAX_VALUE) revert E_NotSupported();
++
+         vaultStorage.hookTarget = newHookTarget;
+         vaultStorage.hookedOps = Flags.wrap(newHookedOps);
+         emit GovSetHookConfig(newHookTarget, newHookedOps);
+@@ -267,6 +354,8 @@ abstract contract GovernanceModule is IGovernance, Base, BalanceUtils, BorrowUti
+ 
+     /// @inheritdoc IGovernance
+     function setConfigFlags(uint32 newConfigFlags) public virtual nonReentrant governorOnly {
++        if (newConfigFlags >= CFG_MAX_VALUE) revert E_NotSupported();
++
+         vaultStorage.configFlags = Flags.wrap(newConfigFlags);
+         emit GovSetConfigFlags(newConfigFlags);
+     }
+diff --git a/src/EVault/modules/Initialize.sol b/src/EVault/modules/Initialize.sol
+index 23d4978..ee6c2e8 100644
+--- a/src/EVault/modules/Initialize.sol
++++ b/src/EVault/modules/Initialize.sol
+@@ -7,18 +7,22 @@ import {Base} from "../shared/Base.sol";
+ import {BorrowUtils} from "../shared/BorrowUtils.sol";
+ import {DToken} from "../DToken.sol";
+ import {ProxyUtils} from "../shared/lib/ProxyUtils.sol";
+-import {VaultCache} from "../shared/types/VaultCache.sol";
++import {RevertBytes} from "../shared/lib/RevertBytes.sol";
++import {AddressUtils} from "../shared/lib/AddressUtils.sol";
+ 
+ import "../shared/Constants.sol";
+ import "../shared/types/Types.sol";
+ 
+ /// @title InitializeModule
++/// @custom:security-contact security@euler.xyz
+ /// @author Euler Labs (https://www.eulerlabs.com/)
+ /// @notice An EVault module implementing the initialization of the new vault contract
+-abstract contract InitializeModule is IInitialize, Base, BorrowUtils {
++abstract contract InitializeModule is IInitialize, BorrowUtils {
+     using TypesLib for uint16;
+ 
+-    uint256 internal constant INITIAL_INTEREST_ACCUMULATOR = 1e27; // 1 ray
++    // Initial value of the interest accumulator: 1 ray
++    uint256 internal constant INITIAL_INTEREST_ACCUMULATOR = 1e27;
++    // Default fee charged on newly accrued interest in CONFIG_SCALE: 10%
+     uint16 internal constant DEFAULT_INTEREST_FEE = 0.1e4;
+ 
+     /// @inheritdoc IInitialize
+@@ -32,7 +36,7 @@ abstract contract InitializeModule is IInitialize, Base, BorrowUtils {
+         if (msg.data.length != 4 + 32 + PROXY_METADATA_LENGTH) revert E_ProxyMetadata();
+         (IERC20 asset,,) = ProxyUtils.metadata();
+         // Make sure the asset is a contract. Token transfers using a library will not revert if address has no code.
+-        if (address(asset).code.length == 0) revert E_BadAddress();
++        AddressUtils.checkContract(address(asset));
+         // Other constraints on values should be enforced by product line
+ 
+         // Create sidecar DToken
+@@ -46,6 +50,14 @@ abstract contract InitializeModule is IInitialize, Base, BorrowUtils {
+         vaultStorage.interestFee = DEFAULT_INTEREST_FEE.toConfigAmount();
+         vaultStorage.creator = vaultStorage.governorAdmin = proxyCreator;
+ 
++        {
++            string memory underlyingSymbol = getTokenSymbol(address(asset));
++            uint256 seqId = sequenceRegistry.reserveSeqId(underlyingSymbol);
++
++            vaultStorage.symbol = string(abi.encodePacked("e", underlyingSymbol, "-", uintToString(seqId)));
++            vaultStorage.name = string(abi.encodePacked("EVK Vault ", vaultStorage.symbol));
++        }
++
+         snapshot.reset();
+ 
+         // Emit logs
+@@ -58,6 +70,35 @@ abstract contract InitializeModule is IInitialize, Base, BorrowUtils {
+     constructor() {
+         initialized = true;
+     }
++
++    /// @dev Calls the asset's symbol() method, taking care to handle MKR-like tokens that return bytes32 instead of string.
++    /// For tokens that do not implement symbol(), "UNDEFINED" will be returned.
++    function getTokenSymbol(address asset) private view returns (string memory) {
++        (bool success, bytes memory data) = address(asset).staticcall(abi.encodeCall(IERC20.symbol, ()));
++        if (!success) return "UNDEFINED";
++        return data.length <= 32 ? string(data) : abi.decode(data, (string));
++    }
++
++    /// @dev Converts a uint256 to a decimal string representation
++    function uintToString(uint256 n) private pure returns (string memory) {
++        unchecked {
++            if (n == 0) return "0";
++
++            uint256 len;
++            for (uint256 m = n; m != 0; m /= 10) {
++                len++;
++            }
++
++            bytes memory output = new bytes(len);
++
++            while (len > 0) {
++                output[--len] = bytes1(uint8(48 + n % 10)); // 48 is ASCII '0'
++                n /= 10;
++            }
++
++            return string(output);
++        }
++    }
+ }
+ 
+ /// @dev Deployable module contract
+diff --git a/src/EVault/modules/Liquidation.sol b/src/EVault/modules/Liquidation.sol
+index f6bd797..b8028ee 100644
+--- a/src/EVault/modules/Liquidation.sol
++++ b/src/EVault/modules/Liquidation.sol
+@@ -10,14 +10,12 @@ import {LiquidityUtils} from "../shared/LiquidityUtils.sol";
+ import "../shared/types/Types.sol";
+ 
+ /// @title LiquidationModule
++/// @custom:security-contact security@euler.xyz
+ /// @author Euler Labs (https://www.eulerlabs.com/)
+ /// @notice An EVault module handling liquidations of unhealthy accounts
+-abstract contract LiquidationModule is ILiquidation, Base, BalanceUtils, LiquidityUtils {
++abstract contract LiquidationModule is ILiquidation, BalanceUtils, LiquidityUtils {
+     using TypesLib for uint256;
+ 
+-    // Maximum liquidation discount that can be awarded under any conditions in wad.
+-    uint256 internal constant MAXIMUM_LIQUIDATION_DISCOUNT = 0.2e18;
+-
+     struct LiquidationCache {
+         address liquidator;
+         address violator;
+@@ -29,6 +27,7 @@ abstract contract LiquidationModule is ILiquidation, Base, BalanceUtils, Liquidi
+     }
+ 
+     /// @inheritdoc ILiquidation
++    /// @dev The function will not revert if the account is healthy and return (0, 0)
+     function checkLiquidation(address liquidator, address violator, address collateral)
+         public
+         view
+@@ -63,7 +62,8 @@ abstract contract LiquidationModule is ILiquidation, Base, BalanceUtils, Liquidi
+         address violator,
+         address collateral,
+         uint256 desiredRepay
+-    ) private view returns (LiquidationCache memory liqCache) {
++    // certora: 'private' to 'internal'
++    ) internal view returns (LiquidationCache memory liqCache) {
+         // Init cache
+ 
+         liqCache.liquidator = liquidator;
+@@ -77,7 +77,7 @@ abstract contract LiquidationModule is ILiquidation, Base, BalanceUtils, Liquidi
+ 
+         // Checks
+ 
+-        // Self liquidation is not allowed
++        // Same account self-liquidation is not allowed
+         if (liqCache.violator == liqCache.liquidator) revert E_SelfLiquidation();
+         // Only liquidate trusted collaterals to make sure yield transfer has no side effects.
+         if (!isRecognizedCollateral(liqCache.collateral)) revert E_BadCollateral();
+@@ -88,6 +88,8 @@ abstract contract LiquidationModule is ILiquidation, Base, BalanceUtils, Liquidi
+         // Violator's health check must not be deferred, meaning no prior operations on violator's account
+         // would possibly be forgiven after the enforced collateral transfer to the liquidator
+         if (isAccountStatusCheckDeferred(violator)) revert E_ViolatorLiquidityDeferred();
++        // A cool off time must elapse since successful account status check in order to mitigate self-liquidaition attacks
++        if (isInLiquidationCoolOff(violator)) revert E_LiquidationCoolOff();
+ 
+         // Violator has no liabilities, liquidation is a no-op
+         if (liqCache.liability.isZero()) return liqCache;
+@@ -116,18 +118,22 @@ abstract contract LiquidationModule is ILiquidation, Base, BalanceUtils, Liquidi
+     {
+         // Check account health
+ 
+-        (uint256 liquidityCollateralValue, uint256 liquidityLiabilityValue) =
++        (uint256 collateralAdjustedValue, uint256 liabilityValue) =
+             calculateLiquidity(vaultCache, liqCache.violator, liqCache.collaterals, true);
+ 
+         // no violation
+-        if (liquidityCollateralValue > liquidityLiabilityValue) return liqCache;
++        if (collateralAdjustedValue > liabilityValue) return liqCache;
+ 
+         // Compute discount
+ 
+-        uint256 discountFactor = liquidityCollateralValue * 1e18 / liquidityLiabilityValue; // discountFactor = health score = 1 - discount
+-
+-        if (discountFactor < 1e18 - MAXIMUM_LIQUIDATION_DISCOUNT) {
+-            discountFactor = 1e18 - MAXIMUM_LIQUIDATION_DISCOUNT;
++        uint256 discountFactor = collateralAdjustedValue * 1e18 / liabilityValue; // discountFactor = health score = 1 - discount
++        {
++            uint256 minDiscountFactor;
++            unchecked {
++                // discount <= config scale, so discount factor >= 0
++                minDiscountFactor = 1e18 - uint256(1e18) * vaultStorage.maxLiquidationDiscount.toUint16() / CONFIG_SCALE;
++            }
++            if (discountFactor < minDiscountFactor) discountFactor = minDiscountFactor;
+         }
+ 
+         // Compute maximum yield using mid-point prices
+@@ -137,17 +143,15 @@ abstract contract LiquidationModule is ILiquidation, Base, BalanceUtils, Liquidi
+             vaultCache.oracle.getQuote(collateralBalance, liqCache.collateral, vaultCache.unitOfAccount);
+ 
+         if (collateralValue == 0) {
+-            // worthless collateral can be claimed with no repay
++            // Worthless collateral can be claimed with no repay. The collateral can be actually worthless, or the amount of available
++            // collateral could be non-representable in the unit of account (rounded down to zero during conversion). In this case
++            // the liquidator is able to claim the collateral without repaying any debt. Note that it's not profitable as long as liquidation
++            // gas costs are larger than the value of a single wei of the reference asset. Care should be taken though when selecting
++            // unit of account and collateral assets.
+             liqCache.yieldBalance = collateralBalance;
+             return liqCache;
+         }
+ 
+-        uint256 liabilityValue = liqCache.liability.toUint();
+-        if (address(vaultCache.asset) != vaultCache.unitOfAccount) {
+-            liabilityValue =
+-                vaultCache.oracle.getQuote(liabilityValue, address(vaultCache.asset), vaultCache.unitOfAccount);
+-        }
+-
+         uint256 maxRepayValue = liabilityValue;
+         uint256 maxYieldValue = maxRepayValue * 1e18 / discountFactor;
+ 
+@@ -174,7 +178,9 @@ abstract contract LiquidationModule is ILiquidation, Base, BalanceUtils, Liquidi
+ 
+         // Handle repay: liquidator takes on violator's debt:
+ 
+-        transferBorrow(vaultCache, liqCache.violator, liqCache.liquidator, liqCache.repay);
++        if (liqCache.repay.toUint() > 0) {
++            transferBorrow(vaultCache, liqCache.violator, liqCache.liquidator, liqCache.repay);
++        }
+ 
+         // Handle yield: liquidator receives violator's collateral
+ 
+@@ -216,6 +222,12 @@ abstract contract LiquidationModule is ILiquidation, Base, BalanceUtils, Liquidi
+             liqCache.liquidator, liqCache.violator, liqCache.collateral, liqCache.repay.toUint(), liqCache.yieldBalance
+         );
+     }
++
++    function isInLiquidationCoolOff(address account) private view returns (bool) {
++        unchecked {
++            return block.timestamp < getLastAccountStatusCheckTimestamp(account) + vaultStorage.liquidationCoolOffTime;
++        }
++    }
+ }
+ 
+ /// @dev Deployable module contract
+diff --git a/src/EVault/modules/RiskManager.sol b/src/EVault/modules/RiskManager.sol
+index ddefae1..03d1660 100644
+--- a/src/EVault/modules/RiskManager.sol
++++ b/src/EVault/modules/RiskManager.sol
+@@ -9,11 +9,10 @@ import {LiquidityUtils} from "../shared/LiquidityUtils.sol";
+ import "../shared/types/Types.sol";
+ 
+ /// @title RiskManagerModule
++/// @custom:security-contact security@euler.xyz
+ /// @author Euler Labs (https://www.eulerlabs.com/)
+ /// @notice An EVault module handling risk management, including vault and account health checks
+-abstract contract RiskManagerModule is IRiskManager, Base, LiquidityUtils {
+-    using TypesLib for uint256;
+-
++abstract contract RiskManagerModule is IRiskManager, LiquidityUtils {
+     /// @inheritdoc IRiskManager
+     function accountLiquidity(address account, bool liquidation)
+         public
+@@ -62,7 +61,7 @@ abstract contract RiskManagerModule is IRiskManager, Base, LiquidityUtils {
+     }
+ 
+     /// @inheritdoc IRiskManager
+-    /// @dev The function doesn't have a re-entrancy lock, because onlyEVCChecks provides equivalent behaviour. It ensures that the caller
++    /// @dev The function doesn't have a reentrancy lock, because onlyEVCChecks provides equivalent behaviour. It ensures that the caller
+     /// is the EVC, in 'checks in progress' state. In this state EVC will not accept any calls. Since all the functions which modify
+     /// vault state use callThroughEVC modifier, they are effectively blocked while the function executes. There are non-view functions without
+     /// callThroughEVC modifier (`flashLoan`, `disableCollateral`), but they don't change the vault's storage.
+@@ -79,9 +78,10 @@ abstract contract RiskManagerModule is IRiskManager, Base, LiquidityUtils {
+     }
+ 
+     /// @inheritdoc IRiskManager
+-    /// @dev See comment about re-entrancy for `checkAccountStatus`
++    /// @dev See comment about reentrancy for `checkAccountStatus`
+     function checkVaultStatus() public virtual reentrantOK onlyEVCChecks returns (bytes4 magicValue) {
+-        // Use the updating variant to make sure interest is accrued in storage before the interest rate update
++        // Use the updating variant to make sure interest is accrued in storage before the interest rate update.
++        // Because of interest rate retargetting during the vault status check, the vault status check must not be forgiven.
+         VaultCache memory vaultCache = updateVault();
+         uint256 newInterestRate = computeInterestRate(vaultCache);
+ 
+diff --git a/src/EVault/modules/Token.sol b/src/EVault/modules/Token.sol
+index 393b45a..3aec5ed 100644
+--- a/src/EVault/modules/Token.sol
++++ b/src/EVault/modules/Token.sol
+@@ -10,9 +10,10 @@ import {ProxyUtils} from "../shared/lib/ProxyUtils.sol";
+ import "../shared/types/Types.sol";
+ 
+ /// @title TokenModule
++/// @custom:security-contact security@euler.xyz
+ /// @author Euler Labs (https://www.eulerlabs.com/)
+ /// @notice An EVault module handling ERC20 behaviour of vault shares
+-abstract contract TokenModule is IToken, Base, BalanceUtils {
++abstract contract TokenModule is IToken, BalanceUtils {
+     using TypesLib for uint256;
+ 
+     /// @inheritdoc IERC20
+@@ -48,28 +49,27 @@ abstract contract TokenModule is IToken, Base, BalanceUtils {
+     }
+ 
+     /// @inheritdoc IERC20
+-    function transfer(address to, uint256 amount) public virtual reentrantOK returns (bool) {
+-        return transferFrom(address(0), to, amount);
++    function transfer(address to, uint256 amount) public virtual nonReentrant returns (bool) {
++        (, address account) = initOperation(OP_TRANSFER, CHECKACCOUNT_CALLER);
++        return transferFromInternal(account, account, to, amount.toShares());
+     }
+ 
+     /// @inheritdoc IToken
+-    function transferFromMax(address from, address to) public virtual reentrantOK returns (bool) {
+-        return transferFrom(from, to, vaultStorage.users[from].getBalance().toUint());
++    function transferFromMax(address from, address to) public virtual nonReentrant returns (bool) {
++        validateTransferFromAccount(from);
++
++        (, address account) = initOperation(OP_TRANSFER, from);
++
++        return transferFromInternal(account, from, to, vaultStorage.users[from].getBalance());
+     }
+ 
+     /// @inheritdoc IERC20
+     function transferFrom(address from, address to, uint256 amount) public virtual nonReentrant returns (bool) {
+-        (, address account) = initOperation(OP_TRANSFER, from == address(0) ? CHECKACCOUNT_CALLER : from);
++        validateTransferFromAccount(from);
+ 
+-        if (from == address(0)) from = account;
+-        if (from == to) revert E_SelfTransfer();
++        (, address account) = initOperation(OP_TRANSFER, from);
+ 
+-        Shares shares = amount.toShares();
+-
+-        decreaseAllowance(from, account, shares);
+-        transferBalance(from, to, shares);
+-
+-        return true;
++        return transferFromInternal(account, from, to, amount.toShares());
+     }
+ 
+     /// @inheritdoc IERC20
+@@ -80,6 +80,21 @@ abstract contract TokenModule is IToken, Base, BalanceUtils {
+ 
+         return true;
+     }
++
++    function transferFromInternal(address account, address from, address to, Shares shares) private returns (bool) {
++        if (from == to) revert E_SelfTransfer();
++
++        decreaseAllowance(from, account, shares);
++        transferBalance(from, to, shares);
++
++        return true;
++    }
++
++    /// @dev Disallow users from passing special addresses used in account status checks as a `from` address.
++    /// @dev Special address values modify the logic of `initOperation` so they should not be allowed.
++    function validateTransferFromAccount(address from) private pure {
++        if (from == CHECKACCOUNT_NONE || from == CHECKACCOUNT_CALLER) revert E_BadSharesOwner();
++    }
+ }
+ 
+ /// @dev Deployable module contract
+diff --git a/src/EVault/modules/Vault.sol b/src/EVault/modules/Vault.sol
+index 9688054..8cd3ea8 100644
+--- a/src/EVault/modules/Vault.sol
++++ b/src/EVault/modules/Vault.sol
+@@ -12,9 +12,10 @@ import {ProxyUtils} from "../shared/lib/ProxyUtils.sol";
+ import "../shared/types/Types.sol";
+ 
+ /// @title VaultModule
++/// @custom:security-contact security@euler.xyz
+ /// @author Euler Labs (https://www.eulerlabs.com/)
+ /// @notice An EVault module handling ERC4626 standard behaviour
+-abstract contract VaultModule is IVault, Base, AssetTransfers, BalanceUtils {
++abstract contract VaultModule is IVault, AssetTransfers, BalanceUtils {
+     using TypesLib for uint256;
+     using SafeERC20Lib for IERC20;
+ 
+@@ -45,8 +46,13 @@ abstract contract VaultModule is IVault, Base, AssetTransfers, BalanceUtils {
+     /// @inheritdoc IERC4626
+     function maxDeposit(address account) public view virtual nonReentrantView returns (uint256) {
+         VaultCache memory vaultCache = loadVault();
++        if (isOperationDisabled(vaultCache.hookedOps, OP_DEPOSIT)) return 0;
+ 
+-        return isOperationDisabled(vaultCache.hookedOps, OP_DEPOSIT) ? 0 : maxDepositInternal(vaultCache, account);
++        // the result may underestimate due to rounding
++        Assets max = maxMintInternal(vaultCache, account).toAssetsDown(vaultCache);
++
++        // if assets round down to zero, deposit reverts with E_ZeroShares
++        return max.toSharesDown(vaultCache).toUint() == 0 ? 0 : max.toUint();
+     }
+ 
+     /// @inheritdoc IERC4626
+@@ -58,12 +64,7 @@ abstract contract VaultModule is IVault, Base, AssetTransfers, BalanceUtils {
+     function maxMint(address account) public view virtual nonReentrantView returns (uint256) {
+         VaultCache memory vaultCache = loadVault();
+ 
+-        if (isOperationDisabled(vaultCache.hookedOps, OP_MINT)) return 0;
+-
+-        // make sure to not revert on conversion
+-        uint256 shares = maxDepositInternal(vaultCache, account).toAssets().toSharesDownUint256(vaultCache);
+-
+-        return shares < MAX_SANE_AMOUNT ? shares : MAX_SANE_AMOUNT;
++        return isOperationDisabled(vaultCache.hookedOps, OP_MINT) ? 0 : maxMintInternal(vaultCache, account).toUint();
+     }
+ 
+     /// @inheritdoc IERC4626
+@@ -78,7 +79,7 @@ abstract contract VaultModule is IVault, Base, AssetTransfers, BalanceUtils {
+ 
+         return isOperationDisabled(vaultCache.hookedOps, OP_WITHDRAW)
+             ? 0
+-            : maxRedeemInternal(owner).toAssetsDown(vaultCache).toUint();
++            : maxRedeemInternal(vaultCache, owner).toAssetsDown(vaultCache).toUint();
+     }
+ 
+     /// @inheritdoc IERC4626
+@@ -89,7 +90,12 @@ abstract contract VaultModule is IVault, Base, AssetTransfers, BalanceUtils {
+ 
+     /// @inheritdoc IERC4626
+     function maxRedeem(address owner) public view virtual nonReentrantView returns (uint256) {
+-        return isOperationDisabled(vaultStorage.hookedOps, OP_REDEEM) ? 0 : maxRedeemInternal(owner).toUint();
++        VaultCache memory vaultCache = loadVault();
++        if (isOperationDisabled(vaultStorage.hookedOps, OP_REDEEM)) return 0;
++
++        Shares max = maxRedeemInternal(vaultCache, owner);
++        // if shares round down to zero, redeem reverts with E_ZeroAssets
++        return max.toAssetsDown(vaultCache).toUint() == 0 ? 0 : max.toUint();
+     }
+ 
+     /// @inheritdoc IERC4626
+@@ -191,8 +197,8 @@ abstract contract VaultModule is IVault, Base, AssetTransfers, BalanceUtils {
+         Shares shares = assets.toSharesDown(vaultCache);
+         if (shares.isZero()) revert E_ZeroShares();
+ 
+-        increaseBalance(vaultCache, receiver, account, shares, assets);
+         vaultStorage.cash = vaultCache.cash = vaultCache.cash + assets;
++        increaseBalance(vaultCache, receiver, account, shares, assets);
+ 
+         return shares.toUint();
+     }
+@@ -225,19 +231,16 @@ abstract contract VaultModule is IVault, Base, AssetTransfers, BalanceUtils {
+         pushAssets(vaultCache, receiver, assets);
+     }
+ 
+-    function maxRedeemInternal(address owner) internal view returns (Shares) {
++    function maxRedeemInternal(VaultCache memory vaultCache, address owner) private view returns (Shares) {
+         Shares max = vaultStorage.users[owner].getBalance();
+-        if (max.isZero()) return Shares.wrap(0);
+ 
+         // If account has borrows, withdrawal might be reverted by the controller during account status checks.
+-        // The collateral vault has no way to verify or enforce the behaviour of the controller, which the account owner
+-        // has enabled. It will therefore assume that all of the assets would be witheld by the controller and
++        // The vault has no way to verify or enforce the behaviour of the controller, which the account owner
++        // has enabled. It will therefore assume that all of the assets would be withheld by the controller and
+         // under-estimate the return amount to zero.
+         // Integrators who handle borrowing should implement custom logic to work with the particular controllers
+         // they want to support.
+-        if (isCollateralEnabled(owner, address(this)) && hasControllerEnabled(owner)) return Shares.wrap(0);
+-
+-        VaultCache memory vaultCache = loadVault();
++        if (max.isZero() || hasAnyControllerEnabled(owner)) return Shares.wrap(0);
+ 
+         Shares cash = vaultCache.cash.toSharesDown(vaultCache);
+         max = max > cash ? cash : max;
+@@ -245,18 +248,24 @@ abstract contract VaultModule is IVault, Base, AssetTransfers, BalanceUtils {
+         return max;
+     }
+ 
+-    function maxDepositInternal(VaultCache memory vaultCache, address) private pure returns (uint256) {
++    function maxMintInternal(VaultCache memory vaultCache, address) private pure returns (Shares) {
+         uint256 supply = totalAssetsInternal(vaultCache);
+-        if (supply >= vaultCache.supplyCap) return 0;
++        if (supply >= vaultCache.supplyCap) return Shares.wrap(0); // at or over the supply cap already
+ 
+-        uint256 remainingSupply;
+         unchecked {
+-            remainingSupply = vaultCache.supplyCap - supply;
+-        }
++            // limit to supply cap
++            uint256 max = vaultCache.supplyCap - supply;
++
++            // limit to cash remaining space
++            uint256 limit = MAX_SANE_AMOUNT - vaultCache.cash.toUint();
++            max = limit < max ? limit : max;
+ 
+-        uint256 remainingCash = MAX_SANE_AMOUNT - vaultCache.cash.toUint();
++            // limit to total shares remaining space
++            max = max.toAssets().toSharesDownUint(vaultCache);
++            limit = MAX_SANE_AMOUNT - vaultCache.totalShares.toUint();
+ 
+-        return remainingCash < remainingSupply ? remainingCash : remainingSupply;
++            return (limit < max ? limit : max).toShares();
++        }
+     }
+ }
+ 
+diff --git a/src/EVault/shared/AssetTransfers.sol b/src/EVault/shared/AssetTransfers.sol
+index fcab20d..3348ded 100644
+--- a/src/EVault/shared/AssetTransfers.sol
++++ b/src/EVault/shared/AssetTransfers.sol
+@@ -8,6 +8,7 @@ import {Base} from "./Base.sol";
+ import "./types/Types.sol";
+ 
+ /// @title AssetTransfers
++/// @custom:security-contact security@euler.xyz
+ /// @author Euler Labs (https://www.eulerlabs.com/)
+ /// @notice Transfer assets into and out of the vault
+ abstract contract AssetTransfers is Base {
+@@ -19,13 +20,18 @@ abstract contract AssetTransfers is Base {
+         vaultStorage.cash = vaultCache.cash = vaultCache.cash + amount;
+     }
+ 
++    /// @dev If the `CFG_EVC_COMPATIBLE_ASSET` flag is set, the function will protect users from mistakenly sending funds
++    /// to the EVC sub-accounts. Functions that push tokens out (`withdraw`, `redeem`, `borrow`) accept a `receiver` argument.
++    /// If the user sets one of their sub-accounts (not the owner) as the receiver, funds would be lost because a regular asset doesn't
++    /// support the EVC's sub-accounts. The private key to a sub-account (not the owner) is not known, so the user would not be able to move
++    /// the funds out. The function will make a best effort to prevent this by checking if the receiver of the token
++    /// is recognized by EVC as a non-owner sub-account. In other words, if there is an account registered in EVC as the owner for the
++    /// intended receiver, the transfer will be prevented. However, there is no guarantee that EVC will have the owner registered.
++    /// If the asset itself is compatible with EVC, it is safe to not set the flag and send the asset to a non-owner sub-account.
+     function pushAssets(VaultCache memory vaultCache, address to, Assets amount) internal virtual {
+         if (
+             to == address(0)
+-            // If the underlying asset is not EVC-compatible, do not transfer assets to any
+-            // address that the EVC knows to be a sub-account. Non-EVC-compatible tokens do
+-            // not know about sub-accounts, so the funds would be lost.
+-            || (vaultCache.configFlags.isNotSet(CFG_EVC_COMPATIBLE_ASSET) && isKnownNonOwnerAccount(to))
++                || (vaultCache.configFlags.isNotSet(CFG_EVC_COMPATIBLE_ASSET) && isKnownNonOwnerAccount(to))
+         ) {
+             revert E_BadAssetReceiver();
+         }
+diff --git a/src/EVault/shared/BalanceUtils.sol b/src/EVault/shared/BalanceUtils.sol
+index dee3756..1c6105e 100644
+--- a/src/EVault/shared/BalanceUtils.sol
++++ b/src/EVault/shared/BalanceUtils.sol
+@@ -3,16 +3,14 @@
+ pragma solidity ^0.8.0;
+ 
+ import {Base} from "./Base.sol";
+-import {IBalanceTracker} from "../../interfaces/IBalanceTracker.sol";
+ 
+ import "./types/Types.sol";
+ 
+ /// @title BalanceUtils
++/// @custom:security-contact security@euler.xyz
+ /// @author Euler Labs (https://www.eulerlabs.com/)
+ /// @notice Utilities for tracking share balances and allowances
+ abstract contract BalanceUtils is Base {
+-    using TypesLib for uint256;
+-
+     // Balances
+ 
+     function increaseBalance(
+@@ -47,12 +45,13 @@ abstract contract BalanceUtils is Base {
+         Shares amount,
+         Assets assets
+     ) internal virtual {
+-        (Shares origBalance, bool balanceForwarderEnabled) = vaultStorage.users[account].getBalanceAndBalanceForwarder();
++        UserStorage storage user = vaultStorage.users[account];
++        (Shares origBalance, bool balanceForwarderEnabled) = user.getBalanceAndBalanceForwarder();
+         if (origBalance < amount) revert E_InsufficientBalance();
+ 
+         Shares newBalance = origBalance.subUnchecked(amount);
+ 
+-        vaultStorage.users[account].setBalance(newBalance);
++        user.setBalance(newBalance);
+         vaultStorage.totalShares = vaultCache.totalShares = vaultCache.totalShares - amount;
+ 
+         if (balanceForwarderEnabled) {
+@@ -68,26 +67,33 @@ abstract contract BalanceUtils is Base {
+     }
+ 
+     function transferBalance(address from, address to, Shares amount) internal virtual {
++        if (to == address(0)) revert E_BadSharesReceiver();
++
+         if (!amount.isZero()) {
+-            (Shares origFromBalance, bool fromBalanceForwarderEnabled) =
+-                vaultStorage.users[from].getBalanceAndBalanceForwarder();
++            // update from
+ 
+-            (Shares origToBalance, bool toBalanceForwarderEnabled) =
+-                vaultStorage.users[to].getBalanceAndBalanceForwarder();
++            UserStorage storage user = vaultStorage.users[from];
+ 
++            (Shares origFromBalance, bool fromBalanceForwarderEnabled) = user.getBalanceAndBalanceForwarder();
+             if (origFromBalance < amount) revert E_InsufficientBalance();
+ 
+             Shares newFromBalance = origFromBalance.subUnchecked(amount);
+-            Shares newToBalance = origToBalance + amount;
++            user.setBalance(newFromBalance);
++
++            // update to
++
++            user = vaultStorage.users[to];
+ 
+-            vaultStorage.users[from].setBalance(newFromBalance);
+-            vaultStorage.users[to].setBalance(newToBalance);
++            (Shares origToBalance, bool toBalanceForwarderEnabled) = user.getBalanceAndBalanceForwarder();
++
++            Shares newToBalance = origToBalance + amount;
++            user.setBalance(newToBalance);
+ 
+             if (fromBalanceForwarderEnabled) {
+                 balanceTracker.balanceTrackerHook(from, newFromBalance.toUint(), isControlCollateralInProgress());
+             }
+ 
+-            if (toBalanceForwarderEnabled) {
++            if (toBalanceForwarderEnabled && from != to) {
+                 balanceTracker.balanceTrackerHook(to, newToBalance.toUint(), false);
+             }
+         }
+@@ -104,17 +110,18 @@ abstract contract BalanceUtils is Base {
+         emit Approval(owner, spender, amount);
+     }
+ 
++    /// @dev As gas saving optimization, consuming allowance doesn't emit the Approval event.
+     function decreaseAllowance(address owner, address spender, Shares amount) internal virtual {
+         if (amount.isZero() || owner == spender) return;
++        UserStorage storage user = vaultStorage.users[owner];
+ 
+-        uint256 allowance = vaultStorage.users[owner].eTokenAllowance[spender];
++        uint256 allowance = user.eTokenAllowance[spender];
+         if (allowance != type(uint256).max) {
+             if (allowance < amount.toUint()) revert E_InsufficientAllowance();
+             unchecked {
+                 allowance -= amount.toUint();
+             }
+-            vaultStorage.users[owner].eTokenAllowance[spender] = allowance;
+-            emit Approval(owner, spender, allowance);
++            user.eTokenAllowance[spender] = allowance;
+         }
+     }
+ }
+diff --git a/src/EVault/shared/Base.sol b/src/EVault/shared/Base.sol
+index 1ff2947..fb10ac1 100644
+--- a/src/EVault/shared/Base.sol
++++ b/src/EVault/shared/Base.sol
+@@ -10,26 +10,38 @@ import {AddressUtils} from "./lib/AddressUtils.sol";
+ 
+ import {IProtocolConfig} from "../../ProtocolConfig/IProtocolConfig.sol";
+ import {IBalanceTracker} from "../../interfaces/IBalanceTracker.sol";
++import {ISequenceRegistry} from "../../interfaces/ISequenceRegistry.sol";
+ 
+ import "./types/Types.sol";
+ 
+ /// @title Base
++/// @custom:security-contact security@euler.xyz
+ /// @author Euler Labs (https://www.eulerlabs.com/)
+ /// @notice Base contract for EVault modules with top level modifiers and utilities
+ abstract contract Base is EVCClient, Cache {
+     IProtocolConfig internal immutable protocolConfig;
++    ISequenceRegistry immutable sequenceRegistry;
+     IBalanceTracker internal immutable balanceTracker;
+     address internal immutable permit2;
+ 
++    /// @title Integrations
++    /// @notice Struct containing addresses of all of the contracts which EVault integrates with
+     struct Integrations {
++        // Ethereum Vault Connector's address
+         address evc;
++        // Address of the contract handling protocol level configurations
+         address protocolConfig;
++        // Address of the contract providing a unique ID used in setting the vault's name and symbol
++        address sequenceRegistry;
++        // Address of the contract which is called when user balances change
+         address balanceTracker;
++        // Address of Uniswap's Permit2 contract
+         address permit2;
+     }
+ 
+     constructor(Integrations memory integrations) EVCClient(integrations.evc) {
+         protocolConfig = IProtocolConfig(AddressUtils.checkContract(integrations.protocolConfig));
++        sequenceRegistry = ISequenceRegistry(AddressUtils.checkContract(integrations.sequenceRegistry));
+         balanceTracker = IBalanceTracker(integrations.balanceTracker);
+         permit2 = integrations.permit2;
+     }
+@@ -80,9 +92,10 @@ abstract contract Base is EVCClient, Cache {
+         // The snapshot is used only to verify that supply increased when checking the supply cap, and to verify that the borrows
+         // increased when checking the borrowing cap. Caps are not checked when the capped variables decrease (become safer).
+         // For this reason, the snapshot is disabled if both caps are disabled.
++        // The snapshot is cleared during the vault status check hence the vault status check must not be forgiven.
+         if (
+             !vaultCache.snapshotInitialized
+-                && (vaultCache.supplyCap < type(uint256).max || vaultCache.borrowCap < type(uint256).max)
++                && !(vaultCache.supplyCap == type(uint256).max && vaultCache.borrowCap == type(uint256).max)
+         ) {
+             vaultStorage.snapshotInitialized = vaultCache.snapshotInitialized = true;
+             snapshot.set(vaultCache.cash, vaultCache.totalBorrows.toAssetsUp());
+diff --git a/src/EVault/shared/BorrowUtils.sol b/src/EVault/shared/BorrowUtils.sol
+index 4cf33b5..baea382 100644
+--- a/src/EVault/shared/BorrowUtils.sol
++++ b/src/EVault/shared/BorrowUtils.sol
+@@ -9,11 +9,10 @@ import {IIRM} from "../../InterestRateModels/IIRM.sol";
+ import "./types/Types.sol";
+ 
+ /// @title BorrowUtils
++/// @custom:security-contact security@euler.xyz
+ /// @author Euler Labs (https://www.eulerlabs.com/)
+ /// @notice Utilities for tracking debt and interest rates
+ abstract contract BorrowUtils is Base {
+-    using TypesLib for uint256;
+-
+     function getCurrentOwed(VaultCache memory vaultCache, address account, Owed owed) internal view returns (Owed) {
+         // Don't bother loading the user's accumulator
+         if (owed.isZero()) return Owed.wrap(0);
+@@ -51,47 +50,58 @@ abstract contract BorrowUtils is Base {
+         setUserBorrow(vaultCache, account, owed);
+         vaultStorage.totalBorrows = vaultCache.totalBorrows = vaultCache.totalBorrows + amount;
+ 
+-        logBorrowChange(account, prevOwed, owed);
++        logBorrow(account, assets, prevOwed.toAssetsUp(), owed.toAssetsUp());
+     }
+ 
+-    function decreaseBorrow(VaultCache memory vaultCache, address account, Assets amount) internal virtual {
++    /// @dev Contrary to `increaseBorrow` and `transferBorrow` this function does the accounting in Assets
++    /// by first rounding up the user's debt. The rounding is an additional cost to the user and is recorded
++    /// both in user's account and in `totalBorrows`
++    function decreaseBorrow(VaultCache memory vaultCache, address account, Assets assets) internal virtual {
+         (Owed owedExact, Owed prevOwed) = loadUserBorrow(vaultCache, account);
+         Assets owed = owedExact.toAssetsUp();
+ 
+-        if (amount > owed) revert E_RepayTooMuch();
++        if (assets > owed) revert E_RepayTooMuch();
+ 
+-        Owed owedRemaining = owed.subUnchecked(amount).toOwed();
++        Owed owedRemaining = owed.subUnchecked(assets).toOwed();
+ 
+         setUserBorrow(vaultCache, account, owedRemaining);
+-        vaultStorage.totalBorrows = vaultCache.totalBorrows =
+-            vaultCache.totalBorrows > owedExact ? vaultCache.totalBorrows - owedExact + owedRemaining : owedRemaining;
++        vaultStorage.totalBorrows = vaultCache.totalBorrows = vaultCache.totalBorrows > owedExact
++            ? vaultCache.totalBorrows.subUnchecked(owedExact).addUnchecked(owedRemaining)
++            : owedRemaining;
+ 
+-        logBorrowChange(account, prevOwed, owedRemaining);
++        logRepay(account, assets, prevOwed.toAssetsUp(), owedRemaining.toAssetsUp());
+     }
+ 
+     function transferBorrow(VaultCache memory vaultCache, address from, address to, Assets assets) internal virtual {
+         Owed amount = assets.toOwed();
+ 
+         (Owed fromOwed, Owed fromOwedPrev) = loadUserBorrow(vaultCache, from);
+-        (Owed toOwed, Owed toOwedPrev) = loadUserBorrow(vaultCache, to);
+ 
+         // If amount was rounded up, or dust is left over, transfer exact amount owed
+-        if ((amount > fromOwed && (amount - fromOwed).isDust()) || (amount < fromOwed && (fromOwed - amount).isDust()))
+-        {
++        if (
++            (amount > fromOwed && amount.subUnchecked(fromOwed).isDust())
++                || (amount < fromOwed && fromOwed.subUnchecked(amount).isDust())
++        ) {
+             amount = fromOwed;
+         }
+ 
+-        if (amount > fromOwed) revert E_InsufficientBalance();
++        if (amount > fromOwed) revert E_InsufficientDebt();
+ 
+         fromOwed = fromOwed.subUnchecked(amount);
++        setUserBorrow(vaultCache, from, fromOwed);
+ 
+-        toOwed = toOwed + amount;
++        (Owed toOwed, Owed toOwedPrev) = loadUserBorrow(vaultCache, to);
+ 
+-        setUserBorrow(vaultCache, from, fromOwed);
++        toOwed = toOwed + amount;
+         setUserBorrow(vaultCache, to, toOwed);
+ 
+-        logBorrowChange(from, fromOwedPrev, fromOwed);
+-        logBorrowChange(to, toOwedPrev, toOwed);
++        logRepay(from, assets, fromOwedPrev.toAssetsUp(), fromOwed.toAssetsUp());
++
++        // with small fractional debt amounts the interest calculation could be negative in `logBorrow`
++        Assets toPrevAssets = toOwedPrev.toAssetsUp();
++        Assets toAssets = toOwed.toAssetsUp();
++        if (assets + toPrevAssets > toAssets) assets = toAssets - toPrevAssets;
++        logBorrow(to, assets, toPrevAssets, toAssets);
+     }
+ 
+     function computeInterestRate(VaultCache memory vaultCache) internal virtual returns (uint256) {
+@@ -153,17 +163,28 @@ abstract contract BorrowUtils is Base {
+         }
+     }
+ 
+-    function logBorrowChange(address account, Owed prevOwed, Owed owed) private {
++    function logBorrow(address account, Assets amount, Assets prevOwed, Assets owed) private {
++        Assets interest = owed.subUnchecked(prevOwed).subUnchecked(amount);
++        if (!interest.isZero()) emit InterestAccrued(account, interest.toUint());
++        if (!amount.isZero()) emit Borrow(account, amount.toUint());
++        logDToken(account, prevOwed, owed);
++    }
++
++    function logRepay(address account, Assets amount, Assets prevOwed, Assets owed) private {
++        Assets interest = owed.addUnchecked(amount).subUnchecked(prevOwed);
++        if (!interest.isZero()) emit InterestAccrued(account, interest.toUint());
++        if (!amount.isZero()) emit Repay(account, amount.toUint());
++        logDToken(account, prevOwed, owed);
++    }
++
++    function logDToken(address account, Assets prevOwed, Assets owed) private {
+         address dTokenAddress = calculateDTokenAddress();
+ 
+         if (owed > prevOwed) {
+-            uint256 change = owed.toAssetsUp().subUnchecked(prevOwed.toAssetsUp()).toUint();
+-            emit Borrow(account, change);
++            uint256 change = owed.subUnchecked(prevOwed).toUint();
+             DToken(dTokenAddress).emitTransfer(address(0), account, change);
+         } else if (prevOwed > owed) {
+-            uint256 change = prevOwed.toAssetsUp().subUnchecked(owed.toAssetsUp()).toUint();
+-
+-            emit Repay(account, change);
++            uint256 change = prevOwed.subUnchecked(owed).toUint();
+             DToken(dTokenAddress).emitTransfer(account, address(0), change);
+         }
+     }
+diff --git a/src/EVault/shared/Cache.sol b/src/EVault/shared/Cache.sol
+index 447425a..1eb345a 100644
+--- a/src/EVault/shared/Cache.sol
++++ b/src/EVault/shared/Cache.sol
+@@ -11,11 +11,11 @@ import {ProxyUtils} from "./lib/ProxyUtils.sol";
+ import "./types/Types.sol";
+ 
+ /// @title Cache
++/// @custom:security-contact security@euler.xyz
+ /// @author Euler Labs (https://www.eulerlabs.com/)
+ /// @notice Utilities for loading vault storage and updating it with interest accrued
+ contract Cache is Storage, Errors {
+     using TypesLib for uint256;
+-    using SafeERC20Lib for IERC20;
+ 
+     // Returns an updated VaultCache
+     // If different from VaultStorage, updates VaultStorage
+@@ -36,8 +36,8 @@ contract Cache is Storage, Errors {
+         initVaultCache(vaultCache);
+     }
+ 
+-    // Takes a VaultCache struct, overwrites it with VaultStorage data and, if time has passed since MarkeStorage
+-    // was last updated, updates MarkeStorage.
++    // Takes a VaultCache struct, overwrites it with VaultStorage data and, if time has passed since VaultStorage
++    // was last updated, updates VaultStorage.
+     // Returns a boolean if the cache is different from storage. VaultCache param is updated to this block.
+     function initVaultCache(VaultCache memory vaultCache) private view returns (bool dirty) {
+         dirty = false;
+@@ -75,28 +75,40 @@ contract Cache is Storage, Errors {
+             uint256 interestRate = vaultStorage.interestRate;
+ 
+             uint256 newInterestAccumulator = vaultCache.interestAccumulator;
++            uint256 newTotalBorrows = vaultCache.totalBorrows.toUint();
+ 
+             unchecked {
++                uint256 intermediate;
+                 (uint256 multiplier, bool overflow) = RPow.rpow(interestRate + 1e27, deltaT, 1e27);
+ 
+                 // if exponentiation or accumulator update overflows, keep the old accumulator
+                 if (!overflow) {
+-                    uint256 intermediate = newInterestAccumulator * multiplier;
++                    intermediate = newInterestAccumulator * multiplier;
+                     if (newInterestAccumulator == intermediate / multiplier) {
+                         newInterestAccumulator = intermediate / 1e27;
+                     }
+                 }
++
++                intermediate = newTotalBorrows * newInterestAccumulator;
++                if (newTotalBorrows == intermediate / newInterestAccumulator) {
++                    newTotalBorrows = intermediate / vaultCache.interestAccumulator;
++                }
+             }
+ 
+-            uint256 newTotalBorrows =
+-                vaultCache.totalBorrows.toUint() * newInterestAccumulator / vaultCache.interestAccumulator;
+             uint256 newAccumulatedFees = vaultCache.accumulatedFees.toUint();
+             uint256 newTotalShares = vaultCache.totalShares.toUint();
+             uint256 feeAssets = (newTotalBorrows - vaultCache.totalBorrows.toUint()) * interestFee.toUint16()
+-                / (1e4 << INTERNAL_DEBT_PRECISION_SHIFT);
++                / (uint256(CONFIG_SCALE) << INTERNAL_DEBT_PRECISION_SHIFT);
+ 
+             if (feeAssets != 0) {
+-                uint256 newTotalAssets = vaultCache.cash.toUint() + OwedLib.toAssetsUpUint256(newTotalBorrows);
++                // Fee shares are minted at a slightly worse price than user deposits (unless the exchange rate of shares to assets is < 1,
++                // which is only possible in an extreme case of large debt socialization).
++                // The discrepancy arises because, firstly, the virtual deposit is not accounted for, and secondly, all new
++                // interest is included in the total assets during the minting process, whereas during a regular user operation, the pre-money conversion
++                // is performed.
++                // This behavior is considered safe and reduces code complexity and gas costs, while its effect is positive for
++                // regular users (unless the exchange rate is abnormally < 1)
++                uint256 newTotalAssets = vaultCache.cash.toUint() + OwedLib.toAssetsUpUint(newTotalBorrows);
+                 newTotalShares = newTotalAssets * newTotalShares / (newTotalAssets - feeAssets);
+                 newAccumulatedFees += newTotalShares - vaultCache.totalShares.toUint();
+             }
+diff --git a/src/EVault/shared/Constants.sol b/src/EVault/shared/Constants.sol
+index 267ec69..dc350bb 100644
+--- a/src/EVault/shared/Constants.sol
++++ b/src/EVault/shared/Constants.sol
+@@ -7,7 +7,7 @@ pragma solidity ^0.8.0;
+ uint256 constant INTERNAL_DEBT_PRECISION_SHIFT = 31;
+ // max amount for Assets and Shares custom types based on a uint112.
+ uint256 constant MAX_SANE_AMOUNT = type(uint112).max;
+-// max debt amount fits in uint144 (112 + 31 bits). Last 31 bits are zeros to enusure max debt rounded up equals max sane amount.
++// max debt amount fits in uint144 (112 + 31 bits). Last 31 bits are zeros to ensure max debt rounded up equals max sane amount.
+ uint256 constant MAX_SANE_DEBT_AMOUNT = uint256(MAX_SANE_AMOUNT) << INTERNAL_DEBT_PRECISION_SHIFT;
+ // proxy trailing calldata length in bytes. Three addresses, 20 bytes each: vault underlying asset, oracle and unit of account.
+ uint256 constant PROXY_METADATA_LENGTH = 60;
+@@ -35,22 +35,28 @@ uint32 constant OP_TRANSFER = 1 << 4;
+ uint32 constant OP_SKIM = 1 << 5;
+ uint32 constant OP_BORROW = 1 << 6;
+ uint32 constant OP_REPAY = 1 << 7;
+-uint32 constant OP_LOOP = 1 << 8;
+-uint32 constant OP_DELOOP = 1 << 9;
+-uint32 constant OP_PULL_DEBT = 1 << 10;
+-uint32 constant OP_CONVERT_FEES = 1 << 11;
+-uint32 constant OP_LIQUIDATE = 1 << 12;
+-uint32 constant OP_FLASHLOAN = 1 << 13;
+-uint32 constant OP_TOUCH = 1 << 14;
+-uint32 constant OP_VAULT_STATUS_CHECK = 1 << 15;
++uint32 constant OP_REPAY_WITH_SHARES = 1 << 8;
++uint32 constant OP_PULL_DEBT = 1 << 9;
++uint32 constant OP_CONVERT_FEES = 1 << 10;
++uint32 constant OP_LIQUIDATE = 1 << 11;
++uint32 constant OP_FLASHLOAN = 1 << 12;
++uint32 constant OP_TOUCH = 1 << 13;
++uint32 constant OP_VAULT_STATUS_CHECK = 1 << 14;
++// Delimiter of possible operations
++uint32 constant OP_MAX_VALUE = 1 << 15;
+ 
+ // Config Flags
+ 
++// When flag is set, debt socialization during liquidation is disabled
+ uint32 constant CFG_DONT_SOCIALIZE_DEBT = 1 << 0;
++// When flag is set, asset is considered to be compatible with EVC sub-accounts and protections
++// against sending assets to sub-accounts are disabled
+ uint32 constant CFG_EVC_COMPATIBLE_ASSET = 1 << 1;
++// Delimiter of possible config flags
++uint32 constant CFG_MAX_VALUE = 1 << 2;
+ 
+ // EVC authentication
+ 
+ // in order to perform these operations, the account doesn't need to have the vault installed as a controller
+ uint32 constant CONTROLLER_NEUTRAL_OPS = OP_DEPOSIT | OP_MINT | OP_WITHDRAW | OP_REDEEM | OP_TRANSFER | OP_SKIM
+-    | OP_REPAY | OP_DELOOP | OP_CONVERT_FEES | OP_FLASHLOAN | OP_TOUCH;
++    | OP_REPAY | OP_REPAY_WITH_SHARES | OP_CONVERT_FEES | OP_FLASHLOAN | OP_TOUCH | OP_VAULT_STATUS_CHECK;
+diff --git a/src/EVault/shared/EVCClient.sol b/src/EVault/shared/EVCClient.sol
+index 189072a..065f668 100644
+--- a/src/EVault/shared/EVCClient.sol
++++ b/src/EVault/shared/EVCClient.sol
+@@ -14,6 +14,7 @@ import {IERC20} from "../IEVault.sol";
+ import {IEVC} from "ethereum-vault-connector/interfaces/IEthereumVaultConnector.sol";
+ 
+ /// @title EVCClient
++/// @custom:security-contact security@euler.xyz
+ /// @author Euler Labs (https://www.eulerlabs.com/)
+ /// @notice Utilities for interacting with the EVC (Ethereum Vault Connector)
+ abstract contract EVCClient is Storage, Events, Errors {
+@@ -35,7 +36,7 @@ abstract contract EVCClient is Storage, Events, Errors {
+         evc.disableController(account);
+     }
+ 
+-    // Authenticate account and controller, making sure the call is made through EVC and the status checks are deferred
++    // Authenticate the account and the controller, making sure the call is made through EVC and the status checks are deferred
+     function EVCAuthenticateDeferred(bool checkController) internal view virtual returns (address) {
+         assert(msg.sender == address(evc)); // this ensures that callThroughEVC modifier was utilized
+ 
+@@ -47,6 +48,7 @@ abstract contract EVCClient is Storage, Events, Errors {
+         return onBehalfOfAccount;
+     }
+ 
++    // Authenticate the account
+     function EVCAuthenticate() internal view virtual returns (address) {
+         if (msg.sender == address(evc)) {
+             (address onBehalfOfAccount,) = evc.getCurrentOnBehalfOfAccount(address(0));
+@@ -56,6 +58,23 @@ abstract contract EVCClient is Storage, Events, Errors {
+         return msg.sender;
+     }
+ 
++    // Authenticate the governor, making sure neither a sub-account nor operator is used. Prohibit the use of control collateral
++    function EVCAuthenticateGovernor() internal view virtual returns (address) {
++        if (msg.sender == address(evc)) {
++            (address onBehalfOfAccount,) = evc.getCurrentOnBehalfOfAccount(address(0));
++
++            if (
++                isKnownNonOwnerAccount(onBehalfOfAccount) || evc.isOperatorAuthenticated()
++                    || evc.isControlCollateralInProgress()
++            ) {
++                revert E_Unauthorized();
++            }
++
++            return onBehalfOfAccount;
++        }
++        return msg.sender;
++    }
++
+     // Checks if the account is known to EVC to be a non-owner sub-account.
+     // Assets that are not EVC integrated should not be sent to those accounts,
+     // as there will be no way to transfer them out.
+@@ -85,7 +104,7 @@ abstract contract EVCClient is Storage, Events, Errors {
+         evc.forgiveAccountStatusCheck(account);
+     }
+ 
+-    function hasControllerEnabled(address account) internal view returns (bool) {
++    function hasAnyControllerEnabled(address account) internal view returns (bool) {
+         return evc.getControllers(account).length > 0;
+     }
+ 
+@@ -109,8 +128,12 @@ abstract contract EVCClient is Storage, Events, Errors {
+         return evc.isControlCollateralInProgress();
+     }
+ 
++    function getLastAccountStatusCheckTimestamp(address account) internal view returns (uint256) {
++        return evc.getLastAccountStatusCheckTimestamp(account);
++    }
++
+     function validateController(address account) internal view {
+-        address[] memory controllers = IEVC(evc).getControllers(account);
++        address[] memory controllers = evc.getControllers(account);
+ 
+         if (controllers.length > 1) revert E_TransientState();
+         if (controllers.length == 0) revert E_NoLiability();
+diff --git a/src/EVault/shared/Errors.sol b/src/EVault/shared/Errors.sol
+index 4100ea3..a4bf6de 100644
+--- a/src/EVault/shared/Errors.sol
++++ b/src/EVault/shared/Errors.sol
+@@ -3,6 +3,7 @@
+ pragma solidity ^0.8.0;
+ 
+ /// @title Errors
++/// @custom:security-contact security@euler.xyz
+ /// @author Euler Labs (https://www.eulerlabs.com/)
+ /// @notice Contract implementing EVault's custom errors
+ contract Errors {
+@@ -13,11 +14,12 @@ contract Errors {
+     error E_InsufficientAllowance();
+     error E_InsufficientCash();
+     error E_InsufficientAssets();
++    error E_InsufficientBalance();
++    error E_InsufficientDebt();
+     error E_FlashLoanNotRepaid();
+     error E_Reentrancy();
+     error E_OperationDisabled();
+     error E_OutstandingDebt();
+-    error E_InsufficientBalance();
+     error E_AmountTooLargeToEncode();
+     error E_DebtAmountTooLargeToEncode();
+     error E_RepayTooMuch();
+@@ -26,6 +28,7 @@ contract Errors {
+     error E_ControllerDisabled();
+     error E_CollateralDisabled();
+     error E_ViolatorLiquidityDeferred();
++    error E_LiquidationCoolOff();
+     error E_ExcessiveRepayAmount();
+     error E_MinYield();
+     error E_BadAddress();
+@@ -33,7 +36,6 @@ contract Errors {
+     error E_ZeroShares();
+     error E_Unauthorized();
+     error E_CheckUnauthorized();
+-    error E_BalanceForwarderUnsupported();
+     error E_NotSupported();
+     error E_EmptyError();
+     error E_BadBorrowCap();
+@@ -47,9 +49,11 @@ contract Errors {
+     error E_BorrowCapExceeded();
+     error E_InvalidLTVAsset();
+     error E_NoPriceOracle();
+-    error E_InvalidConfigAmount();
++    error E_ConfigAmountTooLargeToEncode();
+     error E_BadAssetReceiver();
++    error E_BadSharesOwner();
+     error E_BadSharesReceiver();
+-    error E_LTVRamp();
++    error E_LTVBorrow();
++    error E_LTVLiquidation();
+     error E_NotHookTarget();
+ }
+diff --git a/src/EVault/shared/Events.sol b/src/EVault/shared/Events.sol
+index 2681fe5..be62946 100644
+--- a/src/EVault/shared/Events.sol
++++ b/src/EVault/shared/Events.sol
+@@ -3,6 +3,7 @@
+ pragma solidity ^0.8.0;
+ 
+ /// @title Events
++/// @custom:security-contact security@euler.xyz
+ /// @author Euler Labs (https://www.eulerlabs.com/)
+ /// @notice Contract implementing EVault's events
+ abstract contract Events {
+@@ -23,17 +24,17 @@ abstract contract Events {
+     // ERC4626
+ 
+     /// @notice Deposit assets into an ERC4626 vault
+-    /// @param sender Address initiaiting the deposit
++    /// @param sender Address initiating the deposit
+     /// @param owner Address holding the assets
+     /// @param assets Amount of assets deposited
+-    /// @param shares Amount of shares minted as recipt for the deposit
++    /// @param shares Amount of shares minted as receipt for the deposit
+     event Deposit(address indexed sender, address indexed owner, uint256 assets, uint256 shares);
+ 
+     /// @notice Withdraw from an ERC4626 vault
+     /// @param sender Address initiating the withdrawal
+     /// @param receiver Address receiving the assets
+     /// @param owner Address holding the shares
+-    /// @param assets Amount of assets sent to receiver
++    /// @param assets Amount of assets sent to the receiver
+     /// @param shares Amount of shares burned
+     event Withdraw(
+         address indexed sender, address indexed receiver, address indexed owner, uint256 assets, uint256 shares
+@@ -75,12 +76,17 @@ abstract contract Events {
+     /// @param assets Amount of debt removed in assets
+     event Repay(address indexed account, uint256 assets);
+ 
++    /// @notice Account's debt was increased due to interest
++    /// @param account Address being charged interest
++    /// @param assets Amount of debt added in assets
++    event InterestAccrued(address indexed account, uint256 assets);
++
+     /// @notice Liquidate unhealthy account
+     /// @param liquidator Address executing the liquidation
+     /// @param violator Address holding an unhealthy borrow
+     /// @param collateral Address of the asset seized
+-    /// @param repayAssets Amount of debt in assets transfered from violator to liquidator
+-    /// @param yieldBalance Amount of collateral asset's balance transfered from violator to liquidator
++    /// @param repayAssets Amount of debt in assets transferred from violator to liquidator
++    /// @param yieldBalance Amount of collateral asset's balance transferred from violator to liquidator
+     event Liquidate(
+         address indexed liquidator,
+         address indexed violator,
+diff --git a/src/EVault/shared/LTVUtils.sol b/src/EVault/shared/LTVUtils.sol
+index e3b2b5e..f85168d 100644
+--- a/src/EVault/shared/LTVUtils.sol
++++ b/src/EVault/shared/LTVUtils.sol
+@@ -6,6 +6,7 @@ import {Storage} from "./Storage.sol";
+ import "./types/Types.sol";
+ 
+ /// @title LTVUtils
++/// @custom:security-contact security@euler.xyz
+ /// @author Euler Labs (https://www.eulerlabs.com/)
+ /// @notice Overridable getters for LTV configuration
+ abstract contract LTVUtils is Storage {
+diff --git a/src/EVault/shared/LiquidityUtils.sol b/src/EVault/shared/LiquidityUtils.sol
+index 2d172f4..1de279d 100644
+--- a/src/EVault/shared/LiquidityUtils.sol
++++ b/src/EVault/shared/LiquidityUtils.sol
+@@ -8,6 +8,7 @@ import {LTVUtils} from "./LTVUtils.sol";
+ import "./types/Types.sol";
+ 
+ /// @title LiquidityUtils
++/// @custom:security-contact security@euler.xyz
+ /// @author Euler Labs (https://www.eulerlabs.com/)
+ /// @notice Utilities for calculating account liquidity and health status
+ abstract contract LiquidityUtils is BorrowUtils, LTVUtils {
+@@ -63,8 +64,7 @@ abstract contract LiquidityUtils is BorrowUtils, LTVUtils {
+ 
+             if (!isRecognizedCollateral(collateral)) continue;
+ 
+-            uint256 balance = IERC20(collateral).balanceOf(account);
+-            if (balance > 0) return false;
++            if (IERC20(collateral).balanceOf(account) > 0) return false;
+         }
+ 
+         return true;
+@@ -116,7 +116,7 @@ abstract contract LiquidityUtils is BorrowUtils, LTVUtils {
+             (currentCollateralValue,) = vaultCache.oracle.getQuotes(balance, collateral, vaultCache.unitOfAccount);
+         }
+ 
+-        return currentCollateralValue * ltv.toUint16() / 1e4;
++        return currentCollateralValue * ltv.toUint16() / CONFIG_SCALE;
+     }
+ 
+     function validateOracle(VaultCache memory vaultCache) internal pure {
+diff --git a/src/EVault/shared/Storage.sol b/src/EVault/shared/Storage.sol
+index 7e51764..d745a5a 100644
+--- a/src/EVault/shared/Storage.sol
++++ b/src/EVault/shared/Storage.sol
+@@ -5,6 +5,7 @@ pragma solidity ^0.8.0;
+ import {VaultStorage, Snapshot} from "./types/Types.sol";
+ 
+ /// @title Storage
++/// @custom:security-contact security@euler.xyz
+ /// @author Euler Labs (https://www.eulerlabs.com/)
+ /// @notice Contract that defines the EVault's data storage
+ abstract contract Storage {
+diff --git a/src/EVault/shared/lib/AddressUtils.sol b/src/EVault/shared/lib/AddressUtils.sol
+index cc1c42b..56eddab 100644
+--- a/src/EVault/shared/lib/AddressUtils.sol
++++ b/src/EVault/shared/lib/AddressUtils.sol
+@@ -4,6 +4,10 @@ pragma solidity ^0.8.0;
+ 
+ import "../Errors.sol";
+ 
++/// @title AddressUtils Library
++/// @custom:security-contact security@euler.xyz
++/// @author Euler Labs (https://www.eulerlabs.com/)
++/// @notice The library provides a helper function for checking if provided address is a contract (has code)
+ library AddressUtils {
+     function checkContract(address addr) internal view returns (address) {
+         if (addr.code.length == 0) revert Errors.E_BadAddress();
+diff --git a/src/EVault/shared/lib/ConversionHelpers.sol b/src/EVault/shared/lib/ConversionHelpers.sol
+index 514957e..61b3961 100644
+--- a/src/EVault/shared/lib/ConversionHelpers.sol
++++ b/src/EVault/shared/lib/ConversionHelpers.sol
+@@ -5,11 +5,12 @@ pragma solidity ^0.8.0;
+ import {VaultCache} from "../types/VaultCache.sol";
+ 
+ /// @title ConversionHelpers Library
++/// @custom:security-contact security@euler.xyz
+ /// @author Euler Labs (https://www.eulerlabs.com/)
+ /// @notice The library provides a helper function for conversions between shares and assets
+ library ConversionHelpers {
+     // virtual deposit used in conversions between shares and assets, serving as exchange rate manipulation mitigation
+-    uint256 constant VIRTUAL_DEPOSIT_AMOUNT = 1e6;
++    uint256 internal constant VIRTUAL_DEPOSIT_AMOUNT = 1e6;
+ 
+     function conversionTotals(VaultCache memory vaultCache)
+         internal
+diff --git a/src/EVault/shared/lib/ProxyUtils.sol b/src/EVault/shared/lib/ProxyUtils.sol
+index 2557e9b..66c8ce3 100644
+--- a/src/EVault/shared/lib/ProxyUtils.sol
++++ b/src/EVault/shared/lib/ProxyUtils.sol
+@@ -8,8 +8,9 @@ import {IPriceOracle} from "../../../interfaces/IPriceOracle.sol";
+ import "../Constants.sol";
+ 
+ /// @title ProxyUtils Library
++/// @custom:security-contact security@euler.xyz
+ /// @author Euler Labs (https://www.eulerlabs.com/)
+-/// @notice The library provides a helper function for working with proxy meta data
++/// @notice The library provides helper functions for working with proxy meta data
+ library ProxyUtils {
+     function metadata() internal pure returns (IERC20 asset, IPriceOracle oracle, address unitOfAccount) {
+         assembly {
+@@ -19,6 +20,7 @@ library ProxyUtils {
+         }
+     }
+ 
++    // When `useView` modifier is used, the original caller's address is attached to the call data along with the metadata
+     function useViewCaller() internal pure returns (address viewCaller) {
+         assembly {
+             viewCaller := shr(96, calldataload(sub(calldatasize(), add(PROXY_METADATA_LENGTH, 20))))
+diff --git a/src/EVault/shared/lib/RPow.sol b/src/EVault/shared/lib/RPow.sol
+index bb53857..63a32f6 100644
+--- a/src/EVault/shared/lib/RPow.sol
++++ b/src/EVault/shared/lib/RPow.sol
+@@ -3,10 +3,10 @@
+ pragma solidity ^0.8.0;
+ 
+ /// @notice Arithmetic library with operations for fixed-point numbers.
++/// @custom:security-contact security@euler.xyz
+ /// @author Solmate (https://github.com/transmissions11/solmate/blob/main/src/utils/FixedPointMathLib.sol)
+ /// @author Inspired by USM (https://github.com/usmfum/USM/blob/master/contracts/WadMath.sol)
+-/// @author Modified by Euler to return an `overflow` bool instead of reverting
+-
++/// @author Modified by Euler Labs (https://www.eulerlabs.com/) to return an `overflow` bool instead of reverting
+ library RPow {
+     /// @dev If overflow is true, an overflow occurred and the value of z is undefined
+     function rpow(uint256 x, uint256 n, uint256 scalar) internal pure returns (uint256 z, bool overflow) {
+diff --git a/src/EVault/shared/lib/RevertBytes.sol b/src/EVault/shared/lib/RevertBytes.sol
+index 0fdfc24..da09b12 100644
+--- a/src/EVault/shared/lib/RevertBytes.sol
++++ b/src/EVault/shared/lib/RevertBytes.sol
+@@ -5,6 +5,7 @@ pragma solidity ^0.8.0;
+ import "../Errors.sol";
+ 
+ /// @title RevertBytes Library
++/// @custom:security-contact security@euler.xyz
+ /// @author Euler Labs (https://www.eulerlabs.com/)
+ /// @notice The library provides a helper function for bubbling up errors
+ library RevertBytes {
+diff --git a/src/EVault/shared/lib/SafeERC20Lib.sol b/src/EVault/shared/lib/SafeERC20Lib.sol
+index 26ecdd7..4a99621 100644
+--- a/src/EVault/shared/lib/SafeERC20Lib.sol
++++ b/src/EVault/shared/lib/SafeERC20Lib.sol
+@@ -7,6 +7,7 @@ import {RevertBytes} from "./RevertBytes.sol";
+ import {IPermit2} from "../../../interfaces/IPermit2.sol";
+ 
+ /// @title SafeERC20Lib Library
++/// @custom:security-contact security@euler.xyz
+ /// @author Euler Labs (https://www.eulerlabs.com/)
+ /// @notice The library provides helpers for ERC20 transfers, including Permit2 support
+ library SafeERC20Lib {
+@@ -18,8 +19,7 @@ library SafeERC20Lib {
+         internal
+         returns (bool, bytes memory)
+     {
+-        (bool success, bytes memory data) =
+-            address(token).call(abi.encodeWithSelector(IERC20.transferFrom.selector, from, to, value));
++        (bool success, bytes memory data) = address(token).call(abi.encodeCall(IERC20.transferFrom, (from, to, value)));
+ 
+         return isEmptyOrTrueReturn(success, data) ? (true, bytes("")) : (false, data);
+     }
+@@ -29,7 +29,7 @@ library SafeERC20Lib {
+         bytes memory fallbackData;
+         if (!success && permit2 != address(0)) {
+             if (value > type(uint160).max) {
+-                revert E_TransferFromFailed(tryData, abi.encodeWithSelector(E_Permit2AmountOverflow.selector));
++                revert E_TransferFromFailed(tryData, abi.encodePacked(E_Permit2AmountOverflow.selector));
+             }
+             // it's now safe to down-cast value to uint160
+             (success, fallbackData) =
+@@ -41,8 +41,7 @@ library SafeERC20Lib {
+ 
+     // If no code exists under the token address, the function will succeed. EVault ensures this is not the case in `initialize`.
+     function safeTransfer(IERC20 token, address to, uint256 value) internal {
+-        (bool success, bytes memory data) =
+-            address(token).call(abi.encodeWithSelector(IERC20.transfer.selector, to, value));
++        (bool success, bytes memory data) = address(token).call(abi.encodeCall(IERC20.transfer, (to, value)));
+         if (!isEmptyOrTrueReturn(success, data)) RevertBytes.revertBytes(data);
+     }
+ 
+diff --git a/src/EVault/shared/types/AmountCap.sol b/src/EVault/shared/types/AmountCap.sol
+index ccdd0b2..8831e5a 100644
+--- a/src/EVault/shared/types/AmountCap.sol
++++ b/src/EVault/shared/types/AmountCap.sol
+@@ -5,6 +5,7 @@ pragma solidity ^0.8.0;
+ import {AmountCap} from "./Types.sol";
+ 
+ /// @title AmountCapLib
++/// @custom:security-contact security@euler.xyz
+ /// @author Euler Labs (https://www.eulerlabs.com/)
+ /// @notice Library for `AmountCap` custom type
+ /// @dev AmountCaps are 16-bit decimal floating point values:
+diff --git a/src/EVault/shared/types/Assets.sol b/src/EVault/shared/types/Assets.sol
+index f0ff3eb..7cede48 100644
+--- a/src/EVault/shared/types/Assets.sol
++++ b/src/EVault/shared/types/Assets.sol
+@@ -8,6 +8,7 @@ import {ConversionHelpers} from "../lib/ConversionHelpers.sol";
+ import "../Constants.sol";
+ 
+ /// @title AssetsLib
++/// @custom:security-contact security@euler.xyz
+ /// @author Euler Labs (https://www.eulerlabs.com/)
+ /// @notice Custom type `Assets` represents amounts of the vault's underlying asset
+ library AssetsLib {
+@@ -20,10 +21,10 @@ library AssetsLib {
+     }
+ 
+     function toSharesDown(Assets amount, VaultCache memory vaultCache) internal pure returns (Shares) {
+-        return TypesLib.toShares(toSharesDownUint256(amount, vaultCache));
++        return TypesLib.toShares(toSharesDownUint(amount, vaultCache));
+     }
+ 
+-    function toSharesDownUint256(Assets amount, VaultCache memory vaultCache) internal pure returns (uint256) {
++    function toSharesDownUint(Assets amount, VaultCache memory vaultCache) internal pure returns (uint256) {
+         (uint256 totalAssets, uint256 totalShares) = ConversionHelpers.conversionTotals(vaultCache);
+         unchecked {
+             return amount.toUint() * totalShares / totalAssets;
+@@ -43,6 +44,12 @@ library AssetsLib {
+         }
+     }
+ 
++    function addUnchecked(Assets self, Assets b) internal pure returns (Assets) {
++        unchecked {
++            return Assets.wrap(uint112(self.toUint() + b.toUint()));
++        }
++    }
++
+     function subUnchecked(Assets self, Assets b) internal pure returns (Assets) {
+         unchecked {
+             return Assets.wrap(uint112(self.toUint() - b.toUint()));
+diff --git a/src/EVault/shared/types/ConfigAmount.sol b/src/EVault/shared/types/ConfigAmount.sol
+index 703f783..30e8a86 100644
+--- a/src/EVault/shared/types/ConfigAmount.sol
++++ b/src/EVault/shared/types/ConfigAmount.sol
+@@ -7,6 +7,7 @@ import {Errors} from "../Errors.sol";
+ import "../Constants.sol";
+ 
+ /// @title ConfigAmountLib
++/// @custom:security-contact security@euler.xyz
+ /// @author Euler Labs (https://www.eulerlabs.com/)
+ /// @notice Library for `ConfigAmount` custom type
+ /// @dev ConfigAmounts are floating point values encoded in 16 bits with a 1e4 precision.
+@@ -19,10 +20,6 @@ library ConfigAmountLib {
+     function toUint16(ConfigAmount self) internal pure returns (uint16) {
+         return ConfigAmount.unwrap(self);
+     }
+-
+-    function validate(uint256 amount) internal pure {
+-        if (amount > CONFIG_SCALE) revert Errors.E_InvalidConfigAmount();
+-    }
+ }
+ 
+ function gtConfigAmount(ConfigAmount a, ConfigAmount b) pure returns (bool) {
+diff --git a/src/EVault/shared/types/Flags.sol b/src/EVault/shared/types/Flags.sol
+index 9066c84..90b9b4a 100644
+--- a/src/EVault/shared/types/Flags.sol
++++ b/src/EVault/shared/types/Flags.sol
+@@ -5,6 +5,7 @@ pragma solidity ^0.8.0;
+ import {Flags} from "./Types.sol";
+ 
+ /// @title FlagsLib
++/// @custom:security-contact security@euler.xyz
+ /// @author Euler Labs (https://www.eulerlabs.com/)
+ /// @notice Library for `Flags` custom type
+ library FlagsLib {
+diff --git a/src/EVault/shared/types/LTVConfig.sol b/src/EVault/shared/types/LTVConfig.sol
+index a06191a..80207a3 100644
+--- a/src/EVault/shared/types/LTVConfig.sol
++++ b/src/EVault/shared/types/LTVConfig.sol
+@@ -7,20 +7,23 @@ import {ConfigAmount} from "./Types.sol";
+ /// @title LTVConfig
+ /// @notice This packed struct is used to store LTV configuration of a collateral
+ struct LTVConfig {
+-    // Packed slot: 6 + 2 + 4 + 2 + 1 = 15
+-    // The timestamp when the new liquidation LTV ramping is finished
++    // Packed slot: 2 + 2 + 2 + 6 + 4 + 1 = 17
++    // The value of borrow LTV for originating positions
++    ConfigAmount borrowLTV;
++    // The value of fully converged liquidation LTV
++    ConfigAmount liquidationLTV;
++    // The initial value of liquidation LTV, when the ramp began
++    ConfigAmount initialLiquidationLTV;
++    // The timestamp when the liquidation LTV is considered fully converged
+     uint48 targetTimestamp;
+-    // The value of fully converged LTV value
+-    ConfigAmount targetLTV;
+-    // The time it takes the liquidation LTV to converge with borrowing LTV
++    // The time it takes for the liquidation LTV to converge from the initial value to the fully converged value
+     uint32 rampDuration;
+-    // The previous liquidation LTV value, from which the ramping begun
+-    ConfigAmount originalLTV;
+-    // A flag indicating the configuration was initialized for the collateral
++    // A flag indicating the LTV configuration was initialized for the collateral
+     bool initialized;
+ }
+ 
+ /// @title LTVConfigLib
++/// @custom:security-contact security@euler.xyz
+ /// @author Euler Labs (https://www.eulerlabs.com/)
+ /// @notice Library for getting and setting the LTV configurations
+ library LTVConfigLib {
+@@ -29,43 +32,51 @@ library LTVConfigLib {
+         return self.targetTimestamp != 0;
+     }
+ 
+-    // Get current LTV of a collateral. When liquidation LTV is lowered, it is ramped down to target value over a period of time.
++    // Get current LTV of the collateral. When liquidation LTV is lowered, it is ramped down to the target value over a period of time.
+     function getLTV(LTVConfig memory self, bool liquidation) internal view returns (ConfigAmount) {
+-        if (!liquidation || block.timestamp >= self.targetTimestamp || self.targetLTV >= self.originalLTV) {
+-            return self.targetLTV;
++        if (!liquidation) {
++            return self.borrowLTV;
+         }
+ 
+-        uint256 currentLTV = self.originalLTV.toUint16();
++        if (block.timestamp >= self.targetTimestamp || self.liquidationLTV >= self.initialLiquidationLTV) {
++            return self.liquidationLTV;
++        }
++
++        uint256 currentLiquidationLTV = self.initialLiquidationLTV.toUint16();
+ 
+         unchecked {
+-            uint256 targetLTV = self.targetLTV.toUint16();
++            uint256 targetLiquidationLTV = self.liquidationLTV.toUint16();
+             uint256 timeRemaining = self.targetTimestamp - block.timestamp;
+ 
+-            // targetLTV < originalLTV and timeRemaining < rampDuration
+-            currentLTV = targetLTV + (currentLTV - targetLTV) * timeRemaining / self.rampDuration;
++            // targetLiquidationLTV < initialLiquidationLTV and timeRemaining <= rampDuration
++            currentLiquidationLTV = targetLiquidationLTV
++                + (currentLiquidationLTV - targetLiquidationLTV) * timeRemaining / self.rampDuration;
+         }
+-        // because ramping happens only when LTV decreases, it's safe to down-cast the new value
+-        return ConfigAmount.wrap(uint16(currentLTV));
++
++        // because ramping happens only when liquidation LTV decreases, it's safe to down-cast the new value
++        return ConfigAmount.wrap(uint16(currentLiquidationLTV));
+     }
+ 
+-    function setLTV(LTVConfig memory self, ConfigAmount targetLTV, uint32 rampDuration)
++    function setLTV(LTVConfig memory self, ConfigAmount borrowLTV, ConfigAmount liquidationLTV, uint32 rampDuration)
+         internal
+         view
+         returns (LTVConfig memory newLTV)
+     {
++        newLTV.borrowLTV = borrowLTV;
++        newLTV.liquidationLTV = liquidationLTV;
++        newLTV.initialLiquidationLTV = self.getLTV(true);
+         newLTV.targetTimestamp = uint48(block.timestamp + rampDuration);
+-        newLTV.targetLTV = targetLTV;
+         newLTV.rampDuration = rampDuration;
+-        newLTV.originalLTV = self.getLTV(true);
+         newLTV.initialized = true;
+     }
+ 
+     // When LTV is cleared, the collateral can't be liquidated, as it's deemed unsafe
+     function clear(LTVConfig storage self) internal {
++        self.borrowLTV = ConfigAmount.wrap(0);
++        self.liquidationLTV = ConfigAmount.wrap(0);
++        self.initialLiquidationLTV = ConfigAmount.wrap(0);
+         self.targetTimestamp = 0;
+-        self.targetLTV = ConfigAmount.wrap(0);
+         self.rampDuration = 0;
+-        self.originalLTV = ConfigAmount.wrap(0);
+     }
+ }
+ 
+diff --git a/src/EVault/shared/types/Owed.sol b/src/EVault/shared/types/Owed.sol
+index 6f2cbd3..cf72a2c 100644
+--- a/src/EVault/shared/types/Owed.sol
++++ b/src/EVault/shared/types/Owed.sol
+@@ -6,6 +6,7 @@ import {Owed, Assets, TypesLib} from "./Types.sol";
+ import "../Constants.sol";
+ 
+ /// @title OwedLib
++/// @custom:security-contact security@euler.xyz
+ /// @author Euler Labs (https://www.eulerlabs.com/)
+ /// @notice Library for `Owed` custom type
+ /// @dev The owed type tracks borrowed funds in asset units scaled up by shifting left INTERNAL_DEBT_PRECISION_SHIFT bits.
+@@ -18,7 +19,7 @@ library OwedLib {
+     function toAssetsUp(Owed amount) internal pure returns (Assets) {
+         if (Owed.unwrap(amount) == 0) return Assets.wrap(0);
+ 
+-        return TypesLib.toAssets(toAssetsUpUint256(Owed.unwrap(amount)));
++        return TypesLib.toAssets(toAssetsUpUint(Owed.unwrap(amount)));
+     }
+ 
+     function isDust(Owed self) internal pure returns (bool) {
+@@ -33,13 +34,19 @@ library OwedLib {
+         return TypesLib.toOwed(uint256(Owed.unwrap(self)) * multiplier / divisor);
+     }
+ 
++    function addUnchecked(Owed self, Owed b) internal pure returns (Owed) {
++        unchecked {
++            return Owed.wrap(uint144(self.toUint() + b.toUint()));
++        }
++    }
++
+     function subUnchecked(Owed self, Owed b) internal pure returns (Owed) {
+         unchecked {
+             return Owed.wrap(uint144(self.toUint() - b.toUint()));
+         }
+     }
+ 
+-    function toAssetsUpUint256(uint256 owedExact) internal pure returns (uint256) {
++    function toAssetsUpUint(uint256 owedExact) internal pure returns (uint256) {
+         return (owedExact + (1 << INTERNAL_DEBT_PRECISION_SHIFT) - 1) >> INTERNAL_DEBT_PRECISION_SHIFT;
+     }
+ }
+diff --git a/src/EVault/shared/types/Shares.sol b/src/EVault/shared/types/Shares.sol
+index 13387b6..60c34f5 100644
+--- a/src/EVault/shared/types/Shares.sol
++++ b/src/EVault/shared/types/Shares.sol
+@@ -7,6 +7,7 @@ import {VaultCache} from "./VaultCache.sol";
+ import {ConversionHelpers} from "../lib/ConversionHelpers.sol";
+ 
+ /// @title SharesLib
++/// @custom:security-contact security@euler.xyz
+ /// @author Euler Labs (https://www.eulerlabs.com/)
+ /// @notice Library for `Shares` custom type, which is used to store vault's shares balances
+ library SharesLib {
+diff --git a/src/EVault/shared/types/Snapshot.sol b/src/EVault/shared/types/Snapshot.sol
+index eaaabf1..02628ab 100644
+--- a/src/EVault/shared/types/Snapshot.sol
++++ b/src/EVault/shared/types/Snapshot.sol
+@@ -17,10 +17,11 @@ struct Snapshot {
+ }
+ 
+ /// @title SnapshotLib
++/// @custom:security-contact security@euler.xyz
+ /// @author Euler Labs (https://www.eulerlabs.com/)
+ /// @notice Library for working with the `Snapshot` struct
+ library SnapshotLib {
+-    uint32 constant STAMP = 1; // non zero initial value of the snapshot slot to save gas on SSTORE
++    uint32 private constant STAMP = 1; // non zero initial value of the snapshot slot to save gas on SSTORE
+ 
+     function set(Snapshot storage self, Assets cash, Assets borrows) internal {
+         self.cash = cash;
+diff --git a/src/EVault/shared/types/Types.sol b/src/EVault/shared/types/Types.sol
+index cb73464..8db13ce 100644
+--- a/src/EVault/shared/types/Types.sol
++++ b/src/EVault/shared/types/Types.sol
+@@ -7,7 +7,6 @@ import "../../IEVault.sol";
+ import "./VaultStorage.sol";
+ import "./Snapshot.sol";
+ import "./UserStorage.sol";
+-import "./LTVConfig.sol";
+ 
+ import "./Shares.sol";
+ import "./Assets.sol";
+@@ -77,7 +76,7 @@ library TypesLib {
+     }
+ 
+     function toConfigAmount(uint16 amount) internal pure returns (ConfigAmount) {
+-        ConfigAmountLib.validate(amount);
++        if (amount > CONFIG_SCALE) revert Errors.E_ConfigAmountTooLargeToEncode();
+         return ConfigAmount.wrap(amount);
+     }
+ }
+diff --git a/src/EVault/shared/types/UserStorage.sol b/src/EVault/shared/types/UserStorage.sol
+index d5a029d..9ea588a 100644
+--- a/src/EVault/shared/types/UserStorage.sol
++++ b/src/EVault/shared/types/UserStorage.sol
+@@ -19,6 +19,7 @@ struct UserStorage {
+ }
+ 
+ /// @title UserStorageLib
++/// @custom:security-contact security@euler.xyz
+ /// @author Euler Labs (https://www.eulerlabs.com/)
+ /// @notice Library for working with the UserStorage struct
+ library UserStorageLib {
+diff --git a/src/EVault/shared/types/VaultStorage.sol b/src/EVault/shared/types/VaultStorage.sol
+index becb957..4083eca 100644
+--- a/src/EVault/shared/types/VaultStorage.sol
++++ b/src/EVault/shared/types/VaultStorage.sol
+@@ -21,7 +21,7 @@ struct VaultStorage {
+     AmountCap borrowCap;
+     // A bitfield of operations which trigger a hook call
+     Flags hookedOps;
+-    // A vault global re-entrancy protection flag
++    // A vault global reentrancy protection flag
+     bool reentrancyLocked;
+     // A flag indicating if the vault snapshot has already been initialized for the currently executing batch
+     bool snapshotInitialized;
+@@ -32,9 +32,13 @@ struct VaultStorage {
+     // Sum of all user debts
+     Owed totalBorrows;
+ 
+-    // Packed slot 14 + 4 = 18
++    // Packed slot 14 + 2 + 2 + 4 = 22
+     // Interest fees accrued since the last fee conversion
+     Shares accumulatedFees;
++    // Maximum liquidation discount
++    ConfigAmount maxLiquidationDiscount;
++    // Amount of time in seconds that must pass after a successful account status check before liquidation is possible
++    uint16 liquidationCoolOffTime;
+     // A bitfield of vault configuration options
+     Flags configFlags;
+ 
+diff --git a/src/GenericFactory/BeaconProxy.sol b/src/GenericFactory/BeaconProxy.sol
+index 1b1a145..b5bcffe 100644
+--- a/src/GenericFactory/BeaconProxy.sol
++++ b/src/GenericFactory/BeaconProxy.sol
+@@ -2,6 +2,11 @@
+ 
+ pragma solidity ^0.8.0;
+ 
++/// @title BeaconProxy
++/// @custom:security-contact security@euler.xyz
++/// @author Euler Labs (https://www.eulerlabs.com/)
++/// @notice A proxy contract, forwarding all calls to an implementation contract, fetched from a beacon
++/// @dev The proxy attaches up to 128 bytes of metadata to the delegated call data.
+ contract BeaconProxy {
+     // ERC-1967 beacon address slot. bytes32(uint256(keccak256('eip1967.proxy.beacon')) - 1)
+     bytes32 internal constant BEACON_SLOT = 0xa3f0ad74e5423aebfd80d3ef4346578335a9a72aeaee59ff6cb3582b35133d50;
+diff --git a/src/GenericFactory/GenericFactory.sol b/src/GenericFactory/GenericFactory.sol
+index 176c9be..40e9023 100644
+--- a/src/GenericFactory/GenericFactory.sol
++++ b/src/GenericFactory/GenericFactory.sol
+@@ -5,10 +5,18 @@ pragma solidity ^0.8.0;
+ import {BeaconProxy} from "./BeaconProxy.sol";
+ import {MetaProxyDeployer} from "./MetaProxyDeployer.sol";
+ 
++/// @title IComponent
++/// @notice Minimal interface which must be implemented by the contract deployed by the factory
+ interface IComponent {
++    /// @notice Function replacing the constructor in proxied contracts
++    /// @param creator The new contract's creator address
+     function initialize(address creator) external;
+ }
+ 
++/// @title GenericFactory
++/// @custom:security-contact security@euler.xyz
++/// @author Euler Labs (https://www.eulerlabs.com/)
++/// @notice The factory allows permissionless creation of upgradeable or non-upgradeable proxy contracts and serves as a beacon for the upgradeable ones
+ contract GenericFactory is MetaProxyDeployer {
+     // Constants
+ 
+@@ -17,27 +25,48 @@ contract GenericFactory is MetaProxyDeployer {
+ 
+     // State
+ 
++    /// @title ProxyConfig
++    /// @notice This struct is used to store the configuration of a proxy deployed by the factory
+     struct ProxyConfig {
++        // If true, proxy is an instance of the BeaconProxy
+         bool upgradeable;
+-        address implementation; // may be an out-of-date value, if upgradeable (handled by getProxyConfig)
++        // Address of the implementation contract
++        // May be an out-of-date value, if upgradeable (handled by getProxyConfig)
++        address implementation;
++        // The metadata attached to every call passing through the proxy
+         bytes trailingData;
+     }
+ 
+     uint256 private reentrancyLock;
+ 
+-    mapping(address proxy => ProxyConfig) internal proxyLookup;
+-
++    /// @notice Address of the account authorized to upgrade the implementation contract
+     address public upgradeAdmin;
++    /// @notice Address of the implementation contract, which the deployed proxies will delegate-call to
++    /// @dev The contract must implement the `IComponent` interface
+     address public implementation;
++    /// @notice A lookup for configurations of the proxy contracts deployed by the factory
++    mapping(address proxy => ProxyConfig) internal proxyLookup;
++    /// @notice An array of addresses of all the proxies deployed by the factory
+     address[] public proxyList;
+ 
+     // Events
+ 
++    /// @notice The factory is created
+     event Genesis();
+ 
++    /// @notice A new proxy is created
++    /// @param proxy Address of the new proxy
++    /// @param upgradeable If true, proxy is an instance of the BeaconProxy. If false, the proxy is a minimal meta proxy
++    /// @param implementation Address of the implementation contract, at the time the proxy was deployed
++    /// @param trailingData The metadata that will be attached to every call passing through the proxy
+     event ProxyCreated(address indexed proxy, bool upgradeable, address implementation, bytes trailingData);
+ 
++    /// @notice Set a new implementation contract. All the BeaconProxies are upgraded to the new logic
++    /// @param newImplementation Address of the new implementation contract
+     event SetImplementation(address indexed newImplementation);
++
++    /// @notice Set a new upgrade admin
++    /// @param newUpgradeAdmin Address of the new admin
+     event SetUpgradeAdmin(address indexed newUpgradeAdmin);
+ 
+     // Errors
+@@ -75,31 +104,47 @@ contract GenericFactory is MetaProxyDeployer {
+         emit SetUpgradeAdmin(admin);
+     }
+ 
+-    function createProxy(bool upgradeable, bytes memory trailingData) external nonReentrant returns (address) {
+-        if (implementation == address(0)) revert E_Implementation();
++    /// @notice A permissionless funtion to deploy new proxies
++    /// @param desiredImplementation Address of the implementation contract expected to be registered in the factory during proxy creation
++    /// @param upgradeable If true, the proxy will be an instance of the BeaconProxy. If false, a minimal meta proxy will be deployed
++    /// @param trailingData Metadata to be attached to every call passing through the new proxy
++    /// @return The address of the new proxy
++    /// @dev The desired implementation serves as a protection against (unintentional) front-running of upgrades
++    function createProxy(address desiredImplementation, bool upgradeable, bytes memory trailingData)
++        external
++        nonReentrant
++        returns (address)
++    {
++        address _implementation = implementation;
++        if (desiredImplementation == address(0)) desiredImplementation = _implementation;
++
++        if (desiredImplementation == address(0) || desiredImplementation != _implementation) revert E_Implementation();
+ 
+         address proxy;
+ 
+         if (upgradeable) {
+             proxy = address(new BeaconProxy(trailingData));
+         } else {
+-            proxy = deployMetaProxy(implementation, trailingData);
++            proxy = deployMetaProxy(desiredImplementation, trailingData);
+         }
+ 
+         proxyLookup[proxy] =
+-            ProxyConfig({upgradeable: upgradeable, implementation: implementation, trailingData: trailingData});
++            ProxyConfig({upgradeable: upgradeable, implementation: desiredImplementation, trailingData: trailingData});
+ 
+         proxyList.push(proxy);
+ 
+         IComponent(proxy).initialize(msg.sender);
+ 
+-        emit ProxyCreated(proxy, upgradeable, implementation, trailingData);
++        emit ProxyCreated(proxy, upgradeable, desiredImplementation, trailingData);
+ 
+         return proxy;
+     }
+ 
+     // EVault beacon upgrade
+ 
++    /// @notice Set a new implementation contract
++    /// @param newImplementation Address of the new implementation contract
++    /// @dev Upgrades all existing BeaconProxies to the new logic immediately
+     function setImplementation(address newImplementation) external nonReentrant adminOnly {
+         if (newImplementation == address(0)) revert E_BadAddress();
+         implementation = newImplementation;
+@@ -108,27 +153,43 @@ contract GenericFactory is MetaProxyDeployer {
+ 
+     // Admin role
+ 
++    /// @notice Transfer admin rights to a new address
++    /// @param newUpgradeAdmin Address of the new admin
++    /// @dev For creating non upgradeable factories, or to finalize all upgradeable proxies to current implementation,
++    /// @dev set the admin to zero address.
++    /// @dev If setting to address zero, make sure the implementation contract is already set
+     function setUpgradeAdmin(address newUpgradeAdmin) external nonReentrant adminOnly {
+-        if (newUpgradeAdmin == address(0)) revert E_BadAddress();
+         upgradeAdmin = newUpgradeAdmin;
+         emit SetUpgradeAdmin(newUpgradeAdmin);
+     }
+ 
+     // Proxy getters
+ 
++    /// @notice Get current proxy configuration
++    /// @param proxy Address of the proxy to query
++    /// @return config The proxy's configuration, including current implementation
+     function getProxyConfig(address proxy) external view returns (ProxyConfig memory config) {
+         config = proxyLookup[proxy];
+         if (config.upgradeable) config.implementation = implementation;
+     }
+ 
++    /// @notice Check if an address is a proxy deployed with this factory
++    /// @param proxy Address to check
++    /// @return True if the address is a proxy
+     function isProxy(address proxy) external view returns (bool) {
+         return proxyLookup[proxy].implementation != address(0);
+     }
+ 
++    /// @notice Fetch the length of the deployed proxies list
++    /// @return The length of the proxy list array
+     function getProxyListLength() external view returns (uint256) {
+         return proxyList.length;
+     }
+ 
++    /// @notice Get a slice of the deployed proxies array
++    /// @param start Start index of the slice
++    /// @param end End index of the slice
++    /// @return list An array containing the slice of the proxy list
+     function getProxyListSlice(uint256 start, uint256 end) external view returns (address[] memory list) {
+         if (end == type(uint256).max) end = proxyList.length;
+         if (end < start || end > proxyList.length) revert E_BadQuery();
+diff --git a/src/GenericFactory/MetaProxyDeployer.sol b/src/GenericFactory/MetaProxyDeployer.sol
+index 8aa9404..19b1081 100644
+--- a/src/GenericFactory/MetaProxyDeployer.sol
++++ b/src/GenericFactory/MetaProxyDeployer.sol
+@@ -2,42 +2,27 @@
+ 
+ pragma solidity ^0.8.0;
+ 
++/// @title MetaProxyDeployer
++/// @custom:security-contact security@euler.xyz
++/// @author Euler Labs (https://www.eulerlabs.com/)
+ /// @notice Contract for deploying minimal proxies with metadata, based on EIP-3448.
+ /// @dev The metadata of the proxies does not include the data length as defined by EIP-3448, saving gas at a cost of supporting variable size data.
+ contract MetaProxyDeployer {
+-    /// @dev Creates a proxy for `targetContract` with metadata from `metadata`. Code modified from EIP-3448 reference implementation: https://eips.ethereum.org/EIPS/eip-3448
+-    /// @return addr A non-zero address if successful.
+-    function deployMetaProxy(address targetContract, bytes memory metadata) internal returns (address addr) {
+-        // the following assembly code (init code + contract code) constructs a metaproxy.
+-        assembly {
+-            let offset := add(metadata, 32)
+-            let length := mload(metadata)
+-            // load free memory pointer as per solidity convention
+-            let start := mload(64)
+-            // keep a copy
+-            let ptr := start
+-            // deploy code (11 bytes) + first part of the proxy (21 bytes)
+-            mstore(ptr, 0x600b380380600b3d393df3363d3d373d3d3d3d60368038038091363936013d73)
+-            ptr := add(ptr, 32)
+-
+-            // store the address of the contract to be called
+-            mstore(ptr, shl(96, targetContract))
+-            // 20 bytes
+-            ptr := add(ptr, 20)
++    error E_DeploymentFailed();
+ 
+-            // the remaining proxy code...
+-            mstore(ptr, 0x5af43d3d93803e603457fd5bf300000000000000000000000000000000000000)
+-            // ...13 bytes
+-            ptr := add(ptr, 13)
++    // Meta proxy bytecode from EIP-3488 https://eips.ethereum.org/EIPS/eip-3448
++    bytes constant BYTECODE_HEAD = hex"600b380380600b3d393df3363d3d373d3d3d3d60368038038091363936013d73";
++    bytes constant BYTECODE_TAIL = hex"5af43d3d93803e603457fd5bf3";
+ 
+-            // copy the metadata
+-            {
+-                for { let i := 0 } lt(i, length) { i := add(i, 32) } { mstore(add(ptr, i), mload(add(offset, i))) }
+-            }
+-            ptr := add(ptr, length)
++    /// @dev Creates a proxy for `targetContract` with metadata from `metadata`.
++    /// @return addr A non-zero address if successful.
++    function deployMetaProxy(address targetContract, bytes memory metadata) internal returns (address addr) {
++        bytes memory code = abi.encodePacked(BYTECODE_HEAD, targetContract, BYTECODE_TAIL, metadata);
+ 
+-            // The size is deploy code + contract code + calldatasize - 4.
+-            addr := create(0, start, sub(ptr, start))
++        assembly ("memory-safe") {
++            addr := create(0, add(code, 32), mload(code))
+         }
++
++        if (addr == address(0)) revert E_DeploymentFailed();
+     }
+ }
+diff --git a/src/InterestRateModels/IIRM.sol b/src/InterestRateModels/IIRM.sol
+index 4f64ae7..5067c5e 100644
+--- a/src/InterestRateModels/IIRM.sol
++++ b/src/InterestRateModels/IIRM.sol
+@@ -1,10 +1,25 @@
+ // SPDX-License-Identifier: GPL-2.0-or-later
+ 
+-pragma solidity ^0.8.0;
++pragma solidity >=0.8.0;
+ 
++/// @title IIRM
++/// @custom:security-contact security@euler.xyz
++/// @author Euler Labs (https://www.eulerlabs.com/)
++/// @notice Interface of the interest rate model contracts used by EVault
+ interface IIRM {
+     error E_IRMUpdateUnauthorized();
+ 
++    /// @notice Perform potentially state mutating computation of the new interest rate
++    /// @param vault Address of the vault to compute the new interest rate for
++    /// @param cash Amount of assets held directly by the vault
++    /// @param borrows Amount of assets lent out to borrowers by the vault
++    /// @return Then new interest rate in second percent yield (SPY), scaled by 1e27
+     function computeInterestRate(address vault, uint256 cash, uint256 borrows) external returns (uint256);
++
++    /// @notice Perform computation of the new interest rate without mutating state
++    /// @param vault Address of the vault to compute the new interest rate for
++    /// @param cash Amount of assets held directly by the vault
++    /// @param borrows Amount of assets lent out to borrowers by the vault
++    /// @return Then new interest rate in second percent yield (SPY), scaled by 1e27
+     function computeInterestRateView(address vault, uint256 cash, uint256 borrows) external view returns (uint256);
+ }
+diff --git a/src/InterestRateModels/IRMLinearKink.sol b/src/InterestRateModels/IRMLinearKink.sol
+index bdd4992..8dc56a3 100644
+--- a/src/InterestRateModels/IRMLinearKink.sol
++++ b/src/InterestRateModels/IRMLinearKink.sol
+@@ -4,10 +4,18 @@ pragma solidity ^0.8.0;
+ 
+ import "./IIRM.sol";
+ 
++/// @title IRMLinearKink
++/// @custom:security-contact security@euler.xyz
++/// @author Euler Labs (https://www.eulerlabs.com/)
++/// @notice Implementation of an interest rate model, where interest rate grows linearly with utilization, and spikes after reaching kink
+ contract IRMLinearKink is IIRM {
++    /// @notice Base interest rate applied when utilization is equal zero
+     uint256 public immutable baseRate;
++    /// @notice Slope of the function before the kink
+     uint256 public immutable slope1;
++    /// @notice Slope of the function after the kink
+     uint256 public immutable slope2;
++    /// @notice Utilization at which the slope of the interest rate function changes. In type(uint32).max scale.
+     uint256 public immutable kink;
+ 
+     constructor(uint256 baseRate_, uint256 slope1_, uint256 slope2_, uint256 kink_) {
+@@ -17,6 +25,7 @@ contract IRMLinearKink is IIRM {
+         kink = kink_;
+     }
+ 
++    /// @inheritdoc IIRM
+     function computeInterestRate(address vault, uint256 cash, uint256 borrows)
+         external
+         view
+@@ -28,6 +37,7 @@ contract IRMLinearKink is IIRM {
+         return computeInterestRateInternal(vault, cash, borrows);
+     }
+ 
++    /// @inheritdoc IIRM
+     function computeInterestRateView(address vault, uint256 cash, uint256 borrows)
+         external
+         view
+@@ -40,22 +50,22 @@ contract IRMLinearKink is IIRM {
+     function computeInterestRateInternal(address, uint256 cash, uint256 borrows) internal view returns (uint256) {
+         uint256 totalAssets = cash + borrows;
+ 
+-        uint32 utilisation = totalAssets == 0
+-            ? 0 // empty pool arbitrarily given utilisation of 0
++        uint32 utilization = totalAssets == 0
++            ? 0 // empty pool arbitrarily given utilization of 0
+             : uint32(borrows * type(uint32).max / totalAssets);
+ 
+         uint256 ir = baseRate;
+ 
+-        if (utilisation <= kink) {
+-            ir += utilisation * slope1;
++        if (utilization <= kink) {
++            ir += utilization * slope1;
+         } else {
+             ir += kink * slope1;
+ 
+-            uint256 utilisationOverKink;
++            uint256 utilizationOverKink;
+             unchecked {
+-                utilisationOverKink = utilisation - kink;
++                utilizationOverKink = utilization - kink;
+             }
+-            ir += slope2 * utilisationOverKink;
++            ir += slope2 * utilizationOverKink;
+         }
+ 
+         return ir;
+diff --git a/src/ProductLines/BaseProductLine.sol b/src/ProductLines/BaseProductLine.sol
+deleted file mode 100644
+index 33d57ef..0000000
+--- a/src/ProductLines/BaseProductLine.sol
++++ /dev/null
+@@ -1,113 +0,0 @@
+-// SPDX-License-Identifier: GPL-2.0-or-later
+-
+-pragma solidity ^0.8.0;
+-
+-import {IERC20, IEVault, IGovernance} from "../EVault/IEVault.sol";
+-import {GenericFactory} from "../GenericFactory/GenericFactory.sol";
+-import {RevertBytes} from "../EVault/shared/lib/RevertBytes.sol";
+-
+-import "../EVault/shared/Constants.sol";
+-
+-/// @notice Base contract for product line contracts, which deploy pre-configured EVaults through a GenericFactory
+-abstract contract BaseProductLine {
+-    // Constants
+-
+-    uint256 constant REENTRANCYLOCK__UNLOCKED = 1;
+-    uint256 constant REENTRANCYLOCK__LOCKED = 2;
+-
+-    address public immutable vaultFactory;
+-    address public immutable evc;
+-
+-    // State
+-
+-    uint256 private reentrancyLock;
+-
+-    mapping(address vault => bool created) public vaultLookup;
+-    address[] public vaultList;
+-
+-    // Events
+-
+-    event Genesis();
+-    event VaultCreated(address indexed vault, address indexed asset, bool upgradeable);
+-
+-    // Errors
+-
+-    error E_Reentrancy();
+-    error E_BadQuery();
+-
+-    // Modifiers
+-
+-    modifier nonReentrant() {
+-        if (reentrancyLock == REENTRANCYLOCK__LOCKED) revert E_Reentrancy();
+-
+-        reentrancyLock = REENTRANCYLOCK__LOCKED;
+-        _;
+-        reentrancyLock = REENTRANCYLOCK__UNLOCKED;
+-    }
+-
+-    // Interface
+-
+-    constructor(address vaultFactory_, address evc_) {
+-        vaultFactory = vaultFactory_;
+-        evc = evc_;
+-
+-        reentrancyLock = REENTRANCYLOCK__UNLOCKED;
+-
+-        emit Genesis();
+-    }
+-
+-    function makeNewVaultInternal(bool upgradeable, address asset, address oracle, address unitOfAccount)
+-        internal
+-        returns (IEVault)
+-    {
+-        address newVault =
+-            GenericFactory(vaultFactory).createProxy(upgradeable, abi.encodePacked(asset, oracle, unitOfAccount));
+-
+-        vaultLookup[newVault] = true;
+-        vaultList.push(newVault);
+-
+-        if (isEVCCompatible(asset)) {
+-            uint32 flags = IEVault(newVault).configFlags();
+-            IEVault(newVault).setConfigFlags(flags | CFG_EVC_COMPATIBLE_ASSET);
+-        }
+-
+-        emit VaultCreated(newVault, asset, upgradeable);
+-
+-        return IEVault(newVault);
+-    }
+-
+-    // Getters
+-
+-    function getVaultListLength() external view returns (uint256) {
+-        return vaultList.length;
+-    }
+-
+-    function getVaultListSlice(uint256 start, uint256 end) external view returns (address[] memory list) {
+-        if (end == type(uint256).max) end = vaultList.length;
+-        if (end < start || end > vaultList.length) revert E_BadQuery();
+-
+-        list = new address[](end - start);
+-        for (uint256 i; i < end - start; ++i) {
+-            list[i] = vaultList[start + i];
+-        }
+-    }
+-
+-    function getTokenName(address asset) internal view returns (string memory) {
+-        // Handle MKR like tokens returning bytes32
+-        (bool success, bytes memory data) = address(asset).staticcall(abi.encodeWithSelector(IERC20.name.selector));
+-        if (!success) RevertBytes.revertBytes(data);
+-        return data.length <= 32 ? string(data) : abi.decode(data, (string));
+-    }
+-
+-    function getTokenSymbol(address asset) internal view returns (string memory) {
+-        // Handle MKR like tokens returning bytes32
+-        (bool success, bytes memory data) = address(asset).staticcall(abi.encodeWithSelector(IERC20.symbol.selector));
+-        if (!success) RevertBytes.revertBytes(data);
+-        return data.length <= 32 ? string(data) : abi.decode(data, (string));
+-    }
+-
+-    function isEVCCompatible(address asset) private view returns (bool) {
+-        (bool success, bytes memory data) = asset.staticcall(abi.encodeCall(IGovernance.EVC, ()));
+-        return success && data.length >= 32 && abi.decode(data, (address)) == address(evc);
+-    }
+-}
+diff --git a/src/ProductLines/Core.sol b/src/ProductLines/Core.sol
+deleted file mode 100644
+index c73745a..0000000
+--- a/src/ProductLines/Core.sol
++++ /dev/null
+@@ -1,51 +0,0 @@
+-// SPDX-License-Identifier: GPL-2.0-or-later
+-
+-pragma solidity ^0.8.0;
+-
+-import "./BaseProductLine.sol";
+-
+-/// @notice Contract deploying EVaults, forming the `Core` product line, which are upgradeable and fully governed.
+-contract Core is BaseProductLine {
+-    // Constants
+-
+-    bool public constant UPGRADEABLE = true;
+-
+-    // State
+-
+-    address public governor;
+-    address public feeReceiver;
+-
+-    // Errors
+-
+-    error E_Unauthorized();
+-
+-    // Interface
+-
+-    constructor(address vaultFactory_, address evc_, address governor_, address feeReceiver_)
+-        BaseProductLine(vaultFactory_, evc_)
+-    {
+-        governor = governor_;
+-        feeReceiver = feeReceiver_;
+-    }
+-
+-    modifier governorOnly() {
+-        if (msg.sender != governor) revert E_Unauthorized();
+-        _;
+-    }
+-
+-    function createVault(address asset, address oracle, address unitOfAccount)
+-        external
+-        governorOnly
+-        returns (address)
+-    {
+-        IEVault vault = makeNewVaultInternal(UPGRADEABLE, asset, oracle, unitOfAccount);
+-
+-        vault.setName(string.concat("Core vault: ", getTokenName(asset)));
+-        vault.setSymbol(string.concat("e", getTokenSymbol(asset)));
+-
+-        vault.setFeeReceiver(feeReceiver);
+-        vault.setGovernorAdmin(governor);
+-
+-        return address(vault);
+-    }
+-}
+diff --git a/src/ProductLines/Escrow.sol b/src/ProductLines/Escrow.sol
+deleted file mode 100644
+index 76a1321..0000000
+--- a/src/ProductLines/Escrow.sol
++++ /dev/null
+@@ -1,48 +0,0 @@
+-// SPDX-License-Identifier: GPL-2.0-or-later
+-
+-pragma solidity ^0.8.0;
+-
+-import "./BaseProductLine.sol";
+-import "../EVault/shared/Constants.sol";
+-
+-/// @notice Contract deploying EVaults, forming the `Escrow` product line, which are non-upgradeable
+-/// non-governed, don't allow borrowing and only allow one instance per asset.
+-contract Escrow is BaseProductLine {
+-    // Constants
+-
+-    bool public constant UPGRADEABLE = false;
+-
+-    // State
+-
+-    mapping(address asset => address vault) public assetLookup;
+-
+-    // Errors
+-
+-    error E_AlreadyCreated();
+-
+-    // Interface
+-
+-    constructor(address vaultFactory_, address evc_) BaseProductLine(vaultFactory_, evc_) {}
+-
+-    function createVault(address asset) external returns (address) {
+-        if (assetLookup[asset] != address(0)) revert E_AlreadyCreated();
+-
+-        IEVault vault = makeNewVaultInternal(UPGRADEABLE, asset, address(0), address(0));
+-
+-        assetLookup[asset] = address(vault);
+-
+-        vault.setName(string.concat("Escrow vault: ", getTokenName(asset)));
+-        vault.setSymbol(string.concat("e", getTokenSymbol(asset)));
+-
+-        // Disable borrowing operations
+-        vault.setHookConfig(
+-            address(0),
+-            OP_BORROW | OP_REPAY | OP_LOOP | OP_DELOOP | OP_PULL_DEBT | OP_CONVERT_FEES | OP_LIQUIDATE | OP_TOUCH
+-        );
+-
+-        // Renounce governorship
+-        vault.setGovernorAdmin(address(0));
+-
+-        return address(vault);
+-    }
+-}
+diff --git a/src/ProtocolConfig/IProtocolConfig.sol b/src/ProtocolConfig/IProtocolConfig.sol
+index 45a0886..80ac606 100644
+--- a/src/ProtocolConfig/IProtocolConfig.sol
++++ b/src/ProtocolConfig/IProtocolConfig.sol
+@@ -1,10 +1,18 @@
+ // SPDX-License-Identifier: GPL-2.0-or-later
+ 
+-pragma solidity ^0.8.0;
++pragma solidity >=0.8.0;
+ 
++/**
++ * @title IProtocolConfig
++ * @custom:security-contact security@euler.xyz
++ * @author Euler Labs (https://www.eulerlabs.com/)
++ * @notice Interface of the contract centralizing the protocol's (DAO's) configuration for all the EVault deployments
++ */
+ interface IProtocolConfig {
+     /**
+      * @notice check if a vault's interest fee is valid
++     * @param vault address of the vault
++     * @param interestFee an interest fee value to check
+      * @dev an interest fee is considered valid only when it is greater than or equal the min interest fee and less than or equal the max interest fee
+      * @dev if a vault has a specific interest fee ranges set by admin, it will be used, otherwise the generic ones will bech checked against
+      * @return bool true for valid, else false
+@@ -13,6 +21,7 @@ interface IProtocolConfig {
+ 
+     /**
+      * @notice get protocol fee config for a certain vault
++     * @param vault address of the vault
+      * @dev if vault == address(0), the generic config will be returned
+      * @return address protocol fee receiver
+      * @return uint16 protocol fee share
+@@ -21,6 +30,7 @@ interface IProtocolConfig {
+ 
+     /**
+      * @notice get interest fee ranges for a certain vault
++     * @param vault address of the vault
+      * @dev if vault == address(0), the generic ranges will be returned
+      * @return uint16 min interest fee
+      * @return uint16 max interest fee
+diff --git a/src/ProtocolConfig/ProtocolConfig.sol b/src/ProtocolConfig/ProtocolConfig.sol
+index b07a3e3..113676d 100644
+--- a/src/ProtocolConfig/ProtocolConfig.sol
++++ b/src/ProtocolConfig/ProtocolConfig.sol
+@@ -43,11 +43,48 @@ contract ProtocolConfig is IProtocolConfig {
+     /// @dev per-vault configuration of protocol fee config, takes priority over defaults
+     mapping(address vault => ProtocolFeeConfig) internal _protocolFeeConfig;
+ 
++    /**
++     * @notice Set global default allowed interest fee limits
++     * @param newMinInterestFee lower limit of allowed interest fee
++     * @param newMaxInterestFee upper limit of allowed interest fee
++     */
+     event SetInterestFeeRange(uint16 newMinInterestFee, uint16 newMaxInterestFee);
++
++    /**
++     * @notice Set new fee receiver address
++     * @param newFeeReceiver new fee receiver address
++     */
+     event SetFeeReceiver(address indexed newFeeReceiver);
++
++    /**
++     * @notice Set allowed interest fee limits override for a vault
++     * @param vault address of the vault
++     * @param exists if true a new setting was recorded, if false the override was disabled for the vault
++     * @param minInterestFee lower limit of allowed interest fee
++     * @param maxInterestFee upper limit of allowed interest fee
++     */
+     event SetVaultInterestFeeRange(address indexed vault, bool exists, uint16 minInterestFee, uint16 maxInterestFee);
+-    event SetFeeConfigSetting(address indexed ault, bool exists, address indexed feeReceiver, uint16 protocolFeeShare);
++
++    /**
++     * @notice Set interest fee configuration override for a vault
++     * @param vault address of the vault
++     * @param exists if true a new setting was recorded, if false the override was disabled for the vault
++     * @param feeReceiver address to receive protocol fees
++     * @param protocolFeeShare new protocol fee share
++     */
++    event SetFeeConfigSetting(address indexed vault, bool exists, address indexed feeReceiver, uint16 protocolFeeShare);
++
++    /**
++     * @notice Set a new global default protocol fee share
++     * @param protocolFeeShare previous default protocol fee share
++     * @param newProtocolFeeShare new default protocol fee share
++     */
+     event SetProtocolFeeShare(uint16 protocolFeeShare, uint16 newProtocolFeeShare);
++
++    /**
++     * @notice Transfer admin rights to a new address
++     * @param newAdmin address of the new admin
++     */
+     event SetAdmin(address indexed newAdmin);
+ 
+     /**
+@@ -148,7 +185,7 @@ contract ProtocolConfig is IProtocolConfig {
+     }
+ 
+     /**
+-     * @notice set generic min intereset fee
++     * @notice set generic min interest fee
+      * @dev can only be called by admin
+      * @param minInterestFee_ new min interest fee
+      * @param maxInterestFee_ new max interest fee
+diff --git a/src/SequenceRegistry/SequenceRegistry.sol b/src/SequenceRegistry/SequenceRegistry.sol
+new file mode 100644
+index 0000000..1a9aab2
+--- /dev/null
++++ b/src/SequenceRegistry/SequenceRegistry.sol
+@@ -0,0 +1,30 @@
++// SPDX-License-Identifier: GPL-2.0-or-later
++
++pragma solidity ^0.8.0;
++
++import {ISequenceRegistry} from "../interfaces/ISequenceRegistry.sol";
++
++/// @title SequenceRegistry
++/// @custom:security-contact security@euler.xyz
++/// @author Euler Labs (https://www.eulerlabs.com/)
++/// @notice This contract maintains sequence counters associated with opaque designator strings. Each counter starts at 1.
++/// @dev Anybody can reserve a sequence ID. The only guarantee provided is that no two reservations for the same designator will get the same ID.
++contract SequenceRegistry is ISequenceRegistry {
++    /// @dev Each designator maps to the previous sequence ID issued, or 0 if none were ever issued.
++    mapping(string designator => uint256 lastSeqId) public counters;
++
++    /// @notice A sequence ID has been reserved
++    /// @param designator The opaque designator string
++    /// @param id The reserved ID, which is unique per designator
++    /// @param caller The msg.sender who reserved the ID
++    event SequenceIdReserved(string indexed designator, uint256 indexed id, address indexed caller);
++
++    /// @inheritdoc ISequenceRegistry
++    function reserveSeqId(string calldata designator) external returns (uint256) {
++        uint256 seqId = ++counters[designator];
++
++        emit SequenceIdReserved(designator, seqId, msg.sender);
++
++        return seqId;
++    }
++}
+diff --git a/src/Synths/ERC20Collateral.sol b/src/Synths/ERC20Collateral.sol
+index 81bed2e..d790196 100644
+--- a/src/Synths/ERC20Collateral.sol
++++ b/src/Synths/ERC20Collateral.sol
+@@ -8,8 +8,10 @@ import {ReentrancyGuard} from "openzeppelin-contracts/utils/ReentrancyGuard.sol"
+ import {IEVC, EVCUtil} from "ethereum-vault-connector/utils/EVCUtil.sol";
+ 
+ /// @title ERC20Collateral
+-/// @notice It extends the ERC20 token standard to add the EVC authentication and account status checks so that the
+-/// token contract can be used as collateral in the EVC ecosystem.
++/// @custom:security-contact security@euler.xyz
++/// @author Euler Labs (https://www.eulerlabs.com/)
++/// @notice ERC20Collateral is an ERC20-compatible token with the EVC support which allows it to be used as collateral
++/// in other vaults.
+ abstract contract ERC20Collateral is EVCUtil, ERC20Permit, ReentrancyGuard {
+     constructor(IEVC _evc_, string memory _name_, string memory _symbol_)
+         EVCUtil(address(_evc_))
+@@ -18,7 +20,7 @@ abstract contract ERC20Collateral is EVCUtil, ERC20Permit, ReentrancyGuard {
+     {}
+ 
+     /// @notice Transfers a certain amount of tokens to a recipient.
+-    /// @dev Overriden to add re-entrancy protection.
++    /// @dev Overriden to add reentrancy protection.
+     /// @param to The recipient of the transfer.
+     /// @param amount The amount shares to transfer.
+     /// @return A boolean indicating whether the transfer was successful.
+@@ -27,7 +29,7 @@ abstract contract ERC20Collateral is EVCUtil, ERC20Permit, ReentrancyGuard {
+     }
+ 
+     /// @notice Transfers a certain amount of tokens from a sender to a recipient.
+-    /// @dev Overriden to add re-entrancy protection.
++    /// @dev Overriden to add reentrancy protection.
+     /// @param from The sender of the transfer.
+     /// @param to The recipient of the transfer.
+     /// @param amount The amount of shares to transfer.
+diff --git a/src/Synths/ESynth.sol b/src/Synths/ESynth.sol
+index caf98cb..9d5d6d0 100644
+--- a/src/Synths/ESynth.sol
++++ b/src/Synths/ESynth.sol
+@@ -8,6 +8,12 @@ import {IEVC, EVCUtil} from "ethereum-vault-connector/utils/EVCUtil.sol";
+ import {ERC20Collateral, ERC20, Context} from "./ERC20Collateral.sol";
+ import {IEVault} from "../EVault/IEVault.sol";
+ 
++/// @title ESynth
++/// @custom:security-contact security@euler.xyz
++/// @author Euler Labs (https://www.eulerlabs.com/)
++/// @notice ESynth is an ERC20-compatible token with the EVC support which, thanks to relying on the EVC authentication
++/// and requesting the account status checks on token transfers and burns, allows it to be used as collateral in other
++/// vault. It is meant to be used as an underlying asset of the synthetic asset vault.
+ contract ESynth is ERC20Collateral, Ownable {
+     using EnumerableSet for EnumerableSet.AddressSet;
+ 
+@@ -22,6 +28,7 @@ contract ESynth is ERC20Collateral, Ownable {
+     event MinterCapacitySet(address indexed minter, uint256 capacity);
+ 
+     error E_CapacityReached();
++    error E_NotEVCCompatible();
+ 
+     constructor(IEVC evc_, string memory name_, string memory symbol_)
+         ERC20Collateral(evc_, name_, symbol_)
+@@ -44,6 +51,11 @@ contract ESynth is ERC20Collateral, Ownable {
+         address sender = _msgSender();
+         MinterData memory minterCache = minters[sender];
+ 
++        // Return early if the amount is 0 to prevent emitting possible spam events.
++        if (amount == 0) {
++            return;
++        }
++
+         if (
+             amount > type(uint128).max - minterCache.minted
+                 || minterCache.capacity < uint256(minterCache.minted) + amount
+@@ -58,15 +70,19 @@ contract ESynth is ERC20Collateral, Ownable {
+     }
+ 
+     /// @notice Burns a certain amount of tokens from the accounts balance. Requires the account, except the owner to have an allowance for the sender.
+-    /// @param account The account to burn the tokens from.
++    /// @param burnFrom The account to burn the tokens from.
+     /// @param amount The amount of tokens to burn.
+-    function burn(address account, uint256 amount) external nonReentrant {
++    function burn(address burnFrom, uint256 amount) external nonReentrant {
+         address sender = _msgSender();
+         MinterData memory minterCache = minters[sender];
+ 
++        if (amount == 0) {
++            return;
++        }
++
+         // The allowance check should be performed if the spender is not the account with the exception of the owner burning from this contract.
+-        if (account != sender && !(account == address(this) && sender == owner())) {
+-            _spendAllowance(account, sender, amount);
++        if (burnFrom != sender && !(burnFrom == address(this) && sender == owner())) {
++            _spendAllowance(burnFrom, sender, amount);
+         }
+ 
+         // If burning more than minted, reset minted to 0
+@@ -75,7 +91,7 @@ contract ESynth is ERC20Collateral, Ownable {
+         }
+         minters[sender] = minterCache;
+ 
+-        _burn(account, amount);
++        _burn(burnFrom, amount);
+     }
+ 
+     /// @notice Deposit cash from this contract into the attached vault.
+@@ -83,6 +99,9 @@ contract ESynth is ERC20Collateral, Ownable {
+     /// @param vault The vault to deposit the cash in.
+     /// @param amount The amount of cash to deposit.
+     function allocate(address vault, uint256 amount) external onlyOwner {
++        if (IEVault(vault).EVC() != address(evc)) {
++            revert E_NotEVCCompatible();
++        }
+         ignoredForTotalSupply.add(vault);
+         _approve(address(this), vault, amount, true);
+         IEVault(vault).deposit(amount, address(this));
+diff --git a/src/Synths/EulerSavingsRate.sol b/src/Synths/EulerSavingsRate.sol
+index d0c91ab..1e55d02 100644
+--- a/src/Synths/EulerSavingsRate.sol
++++ b/src/Synths/EulerSavingsRate.sol
+@@ -2,18 +2,29 @@
+ pragma solidity ^0.8.0;
+ 
+ import {Context} from "openzeppelin-contracts/utils/Context.sol";
++import {Math} from "openzeppelin-contracts/utils/math/Math.sol";
+ import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
+ import {ERC20} from "openzeppelin-contracts/token/ERC20/ERC20.sol";
+ import {ERC4626} from "openzeppelin-contracts/token/ERC20/extensions/ERC4626.sol";
+ import {IEVC} from "ethereum-vault-connector/interfaces/IEthereumVaultConnector.sol";
+ import {EVCUtil} from "ethereum-vault-connector/utils/EVCUtil.sol";
+ 
+-// @note Do NOT use with fee on transfer tokens
+-// @note Do NOT use with rebasing tokens
++/// @title EulerSavingsRate
++/// @custom:security-contact security@euler.xyz
++/// @author Euler Labs (https://www.eulerlabs.com/)
++/// @notice EulerSavingsRate is a ERC4626-compatible vault which allows users to deposit the underlying asset and receive
++/// interest in the form of the same underlying asset. On withdraw, redeem and transfers, the account status checks must be
++/// requested for the account which health might be negatively affected. Thanks to that, the shares of the EulerSavingsRate
++/// vault might be used as collateral by other EVC-compatible vaults.
++/// @dev Do NOT use with fee on transfer tokens
++/// @dev Do NOT use with rebasing tokens
+ contract EulerSavingsRate is EVCUtil, ERC4626 {
+-    uint8 internal constant REENTRANCYLOCK__UNLOCKED = 1;
+-    uint8 internal constant REENTRANCYLOCK__LOCKED = 2;
++    using Math for uint256;
+ 
++    uint8 internal constant UNLOCKED = 1;
++    uint8 internal constant LOCKED = 2;
++
++    uint256 internal constant VIRTUAL_AMOUNT = 1e6;
+     uint256 public constant INTEREST_SMEAR = 2 weeks;
+ 
+     struct ESRSlot {
+@@ -24,8 +35,7 @@ contract EulerSavingsRate is EVCUtil, ERC4626 {
+     }
+ 
+     ESRSlot internal esrSlot;
+-
+-    uint256 internal totalAssetsDeposited;
++    uint256 internal _totalAssets;
+ 
+     error Reentrancy();
+ 
+@@ -38,11 +48,11 @@ contract EulerSavingsRate is EVCUtil, ERC4626 {
+     }
+ 
+     modifier nonReentrant() {
+-        if (esrSlot.locked == REENTRANCYLOCK__LOCKED) revert Reentrancy();
++        if (esrSlot.locked == LOCKED) revert Reentrancy();
+ 
+-        esrSlot.locked = REENTRANCYLOCK__LOCKED;
++        esrSlot.locked = LOCKED;
+         _;
+-        esrSlot.locked = REENTRANCYLOCK__UNLOCKED;
++        esrSlot.locked = UNLOCKED;
+     }
+ 
+     constructor(IEVC _evc, address _asset, string memory _name, string memory _symbol)
+@@ -50,11 +60,41 @@ contract EulerSavingsRate is EVCUtil, ERC4626 {
+         ERC4626(IERC20(_asset))
+         ERC20(_name, _symbol)
+     {
+-        esrSlot.locked = REENTRANCYLOCK__UNLOCKED;
++        esrSlot.locked = UNLOCKED;
+     }
+ 
++    /// @notice Returns the total assets deposited + any accrued interest.
++    /// @return The total assets deposited + any accrued interest.
+     function totalAssets() public view override returns (uint256) {
+-        return totalAssetsDeposited + interestAccrued();
++        return _totalAssets + interestAccrued();
++    }
++
++    function maxRedeem(address owner) public view override returns (uint256) {
++        // If account has borrows, withdrawal might be reverted by the controller during account status checks.
++        // The vault has no way to verify or enforce the behaviour of the controller, which the account owner
++        // has enabled. It will therefore assume that all of the assets would be witheld by the controller and
++        // under-estimate the return amount to zero.
++        // Integrators who handle borrowing should implement custom logic to work with the particular controllers
++        // they want to support.
++        if (evc.getControllers(owner).length > 0) {
++            return 0;
++        }
++
++        return super.maxRedeem(owner);
++    }
++
++    function maxWithdraw(address owner) public view override returns (uint256) {
++        // If account has borrows, withdrawal might be reverted by the controller during account status checks.
++        // The vault has no way to verify or enforce the behaviour of the controller, which the account owner
++        // has enabled. It will therefore assume that all of the assets would be witheld by the controller and
++        // under-estimate the return amount to zero.
++        // Integrators who handle borrowing should implement custom logic to work with the particular controllers
++        // they want to support.
++        if (evc.getControllers(owner).length > 0) {
++            return 0;
++        }
++
++        return super.maxWithdraw(owner);
+     }
+ 
+     /// @notice Transfers a certain amount of tokens to a recipient.
+@@ -86,40 +126,64 @@ contract EulerSavingsRate is EVCUtil, ERC4626 {
+         return super.transferFrom(from, to, amount);
+     }
+ 
++    /// @notice Deposits a certain amount of assets to the vault.
++    /// @param assets The amount of assets to deposit.
++    /// @param receiver The recipient of the shares.
++    /// @return The amount of shares minted.
+     function deposit(uint256 assets, address receiver) public override nonReentrant returns (uint256) {
+         return super.deposit(assets, receiver);
+     }
+ 
+-    function mint(uint256 assets, address receiver) public override nonReentrant returns (uint256) {
+-        return super.mint(assets, receiver);
++    /// @notice Mints a certain amount of shares to the account.
++    /// @param shares The amount of assets to mint.
++    /// @param receiver The account to mint the shares to.
++    /// @return The amount of assets spend.
++    function mint(uint256 shares, address receiver) public override nonReentrant returns (uint256) {
++        return super.mint(shares, receiver);
+     }
+ 
++    /// @notice Deposits a certain amount of assets to the vault.
++    /// @param assets The amount of assets to deposit.
++    /// @param receiver The recipient of the shares.
++    /// @return The amount of shares minted.
+     function withdraw(uint256 assets, address receiver, address owner)
+         public
+         override
+         nonReentrant
+         requireAccountStatusCheck(owner)
+-        returns (uint256 shares)
++        returns (uint256)
+     {
+-        // Move interest to totalAssetsDeposited
++        // Move interest to totalAssets
+         updateInterestAndReturnESRSlotCache();
+         return super.withdraw(assets, receiver, owner);
+     }
+ 
++    /// @notice Redeems a certain amount of shares for assets.
++    /// @param shares The amount of shares to redeem.
++    /// @param receiver The recipient of the assets.
++    /// @return The amount of assets redeemed.
+     function redeem(uint256 shares, address receiver, address owner)
+         public
+         override
+         nonReentrant
+         requireAccountStatusCheck(owner)
+-        returns (uint256 assets)
++        returns (uint256)
+     {
+-        // Move interest to totalAssetsDeposited
++        // Move interest to totalAssets
+         updateInterestAndReturnESRSlotCache();
+         return super.redeem(shares, receiver, owner);
+     }
+ 
++    function _convertToShares(uint256 assets, Math.Rounding rounding) internal view override returns (uint256) {
++        return assets.mulDiv(totalSupply() + VIRTUAL_AMOUNT, totalAssets() + VIRTUAL_AMOUNT, rounding);
++    }
++
++    function _convertToAssets(uint256 shares, Math.Rounding rounding) internal view override returns (uint256) {
++        return shares.mulDiv(totalAssets() + VIRTUAL_AMOUNT, totalSupply() + VIRTUAL_AMOUNT, rounding);
++    }
++
+     function _deposit(address caller, address receiver, uint256 assets, uint256 shares) internal override {
+-        totalAssetsDeposited += assets;
++        _totalAssets = _totalAssets + assets;
+         super._deposit(caller, receiver, assets, shares);
+     }
+ 
+@@ -127,15 +191,16 @@ contract EulerSavingsRate is EVCUtil, ERC4626 {
+         internal
+         override
+     {
+-        totalAssetsDeposited -= assets;
++        _totalAssets = _totalAssets - assets;
+         super._withdraw(caller, receiver, owner, assets, shares);
+     }
+ 
++    /// @notice Smears any donations to this vault as interest.
+     function gulp() public nonReentrant {
+         ESRSlot memory esrSlotCache = updateInterestAndReturnESRSlotCache();
+ 
+         uint256 assetBalance = IERC20(asset()).balanceOf(address(this));
+-        uint256 toGulp = assetBalance - totalAssetsDeposited - esrSlotCache.interestLeft;
++        uint256 toGulp = assetBalance - _totalAssets - esrSlotCache.interestLeft;
+ 
+         uint256 maxGulp = type(uint168).max - esrSlotCache.interestLeft;
+         if (toGulp > maxGulp) toGulp = maxGulp; // cap interest, allowing the vault to function
+@@ -147,6 +212,8 @@ contract EulerSavingsRate is EVCUtil, ERC4626 {
+         esrSlot = esrSlotCache;
+     }
+ 
++    /// @notice Updates the interest and returns the ESR storage slot cache.
++    /// @return The ESR storage slot cache.
+     function updateInterestAndReturnESRSlotCache() public returns (ESRSlot memory) {
+         ESRSlot memory esrSlotCache = esrSlot;
+         uint256 accruedInterest = interestAccruedFromCache(esrSlotCache);
+@@ -156,12 +223,13 @@ contract EulerSavingsRate is EVCUtil, ERC4626 {
+         esrSlotCache.lastInterestUpdate = uint40(block.timestamp);
+         // write esrSlotCache back to storage in a single SSTORE
+         esrSlot = esrSlotCache;
+-        // Move interest accrued to totalAssetsDeposited
+-        totalAssetsDeposited += accruedInterest;
++        // Move interest accrued to totalAssets
++        _totalAssets = _totalAssets + accruedInterest;
+ 
+         return esrSlotCache;
+     }
+ 
++    /// @notice Returns the amount of interest accrued.
+     function interestAccrued() public view returns (uint256) {
+         return interestAccruedFromCache(esrSlot);
+     }
+@@ -184,6 +252,7 @@ contract EulerSavingsRate is EVCUtil, ERC4626 {
+         return esrSlotCache.interestLeft * timePassed / totalDuration;
+     }
+ 
++    /// @notice Returns the ESR storage slot as a struct.
+     function getESRSlot() public view returns (ESRSlot memory) {
+         return esrSlot;
+     }
+diff --git a/src/Synths/IRMSynth.sol b/src/Synths/IRMSynth.sol
+index 197cac4..f4963ed 100644
+--- a/src/Synths/IRMSynth.sol
++++ b/src/Synths/IRMSynth.sol
+@@ -4,9 +4,15 @@ pragma solidity ^0.8.0;
+ 
+ import "../InterestRateModels/IIRM.sol";
+ import "../interfaces/IPriceOracle.sol";
+-
++import {IERC20} from "../EVault/IEVault.sol";
++
++/// @title IRMSynth
++/// @custom:security-contact security@euler.xyz
++/// @author Euler Labs (https://www.eulerlabs.com/)
++/// @notice Synthetic asset vaults use a different interest rate model than the standard vaults. The IRMSynth interest
++/// rate model is a simple reactive rate model which adjusts the interest rate up when it trades below the targetQuote
++/// and down when it trades above or at the targetQuote.
+ contract IRMSynth is IIRM {
+-    uint256 public constant TARGET_QUOTE = 1e18;
+     uint216 internal constant SECONDS_PER_YEAR = 365.2425 * 86400; // Gregorian calendar
+     uint216 public constant MAX_RATE = 1e27 * 1.5 / SECONDS_PER_YEAR; // 150% APR
+     uint216 public constant BASE_RATE = 1e27 * 0.005 / SECONDS_PER_YEAR; // 0.5% APR
+@@ -17,6 +23,8 @@ contract IRMSynth is IIRM {
+     address public immutable synth;
+     address public immutable referenceAsset;
+     IPriceOracle public immutable oracle;
++    uint256 public immutable targetQuote;
++    uint256 public immutable quoteAmount;
+ 
+     struct IRMData {
+         uint40 lastUpdated;
+@@ -26,8 +34,9 @@ contract IRMSynth is IIRM {
+     IRMData internal irmStorage;
+ 
+     error E_ZeroAddress();
++    error E_InvalidQuote();
+ 
+-    constructor(address synth_, address referenceAsset_, address oracle_) {
++    constructor(address synth_, address referenceAsset_, address oracle_, uint256 targetQuoute_) {
+         if (synth_ == address(0) || referenceAsset_ == address(0) || oracle_ == address(0)) {
+             revert E_ZeroAddress();
+         }
+@@ -35,6 +44,14 @@ contract IRMSynth is IIRM {
+         synth = synth_;
+         referenceAsset = referenceAsset_;
+         oracle = IPriceOracle(oracle_);
++        targetQuote = targetQuoute_;
++        quoteAmount = 10 ** IERC20(synth_).decimals();
++
++        // Refusing to proceed with worthless asset
++        uint256 testQuote = IPriceOracle(oracle_).getQuote(quoteAmount, synth_, referenceAsset_);
++        if (testQuote == 0) {
++            revert E_InvalidQuote();
++        }
+ 
+         irmStorage = IRMData({lastUpdated: uint40(block.timestamp), lastRate: BASE_RATE});
+     }
+@@ -64,16 +81,11 @@ contract IRMSynth is IIRM {
+             return (rate, updated);
+         }
+ 
+-        uint256 quote = oracle.getQuote(1e18, synth, referenceAsset);
+-
+-        // If the quote is 0, return the last rate
+-        if (quote == 0) {
+-            return (rate, updated);
+-        }
++        uint256 quote = oracle.getQuote(quoteAmount, synth, referenceAsset);
+ 
+         updated = true;
+ 
+-        if (quote < TARGET_QUOTE) {
++        if (quote < targetQuote) {
+             // If the quote is less than the target, increase the rate
+             rate = rate * ADJUST_FACTOR / ADJUST_ONE;
+         } else {
+diff --git a/src/Synths/PegStabilityModule.sol b/src/Synths/PegStabilityModule.sol
+index 23e1426..560c636 100644
+--- a/src/Synths/PegStabilityModule.sol
++++ b/src/Synths/PegStabilityModule.sol
+@@ -7,13 +7,24 @@ import {IERC20} from "openzeppelin-contracts/token/ERC20/IERC20.sol";
+ import {SafeERC20} from "openzeppelin-contracts/token/ERC20/utils/SafeERC20.sol";
+ import {ESynth} from "./ESynth.sol";
+ 
++/// @title PegStabilityModule
++/// @custom:security-contact security@euler.xyz
++/// @author Euler Labs (https://www.eulerlabs.com/)
++/// @notice The PegStabilityModule is granted minting rights on the ESynth and must allow slippage-free conversion from
++/// and to the underlying asset as per configured conversionPrice. On deployment, the fee for swaps to synthetic asset
++/// and to underlying asset are defined. These fees must accrue to the PegStabilityModule contract and can not be withdrawn,
++/// serving as a permanent reserve to support the peg. Swapping to the synthetic asset is possible up to the minting cap
++/// granted for the PegStabilityModule in the ESynth. Swapping to the underlying asset is possible up to the amount of
++/// the underlying asset held by the PegStabilityModule.
+ contract PegStabilityModule is EVCUtil {
+     using SafeERC20 for IERC20;
+ 
+     uint256 public constant BPS_SCALE = 100_00;
++    uint256 public constant PRICE_SCALE = 1e18;
+ 
+     ESynth public immutable synth;
+     IERC20 public immutable underlying;
++    uint256 public immutable conversionPrice; // 1e18 = 1 SYNTH == 1 UNDERLYING, 0.01e18 = 1 SYNTH == 0.01 UNDERLYING
+ 
+     uint256 public immutable TO_UNDERLYING_FEE;
+     uint256 public immutable TO_SYNTH_FEE;
+@@ -21,10 +32,21 @@ contract PegStabilityModule is EVCUtil {
+     error E_ZeroAddress();
+     error E_FeeExceedsBPS();
+ 
+-    constructor(address _evc, address _synth, address _underlying, uint256 toUnderlyingFeeBPS, uint256 toSynthFeeBPS)
+-        EVCUtil(_evc)
+-    {
+-        if (toUnderlyingFeeBPS > BPS_SCALE || toSynthFeeBPS > BPS_SCALE) {
++    /// @param _evc The address of the EVC.
++    /// @param _synth The address of the synthetic asset.
++    /// @param _underlying The address of the underlying asset.
++    /// @param toUnderlyingFeeBPS The fee for swapping to the underlying asset in basis points. eg: 100 = 1%
++    /// @param toSynthFeeBPS The fee for swapping to the synthetic asset in basis points. eg: 100 = 1%
++    /// @param _conversionPrice The conversion price between the synthetic and underlying asset. eg: 1e18 = 1 SYNTH == 1 UNDERLYING, 0.01e18 = 1 SYNTH == 0.01 UNDERLYING
++    constructor(
++        address _evc,
++        address _synth,
++        address _underlying,
++        uint256 toUnderlyingFeeBPS,
++        uint256 toSynthFeeBPS,
++        uint256 _conversionPrice
++    ) EVCUtil(_evc) {
++        if (toUnderlyingFeeBPS >= BPS_SCALE || toSynthFeeBPS >= BPS_SCALE) {
+             revert E_FeeExceedsBPS();
+         }
+ 
+@@ -36,10 +58,18 @@ contract PegStabilityModule is EVCUtil {
+         underlying = IERC20(_underlying);
+         TO_UNDERLYING_FEE = toUnderlyingFeeBPS;
+         TO_SYNTH_FEE = toSynthFeeBPS;
++        conversionPrice = _conversionPrice;
+     }
+ 
++    /// @notice Swaps the given amount of synth to underlying given an input amount of synth.
++    /// @param amountIn The amount of synth to swap.
++    /// @param receiver The address to receive the underlying.
++    /// @return The amount of underlying received.
+     function swapToUnderlyingGivenIn(uint256 amountIn, address receiver) external returns (uint256) {
+         uint256 amountOut = quoteToUnderlyingGivenIn(amountIn);
++        if (amountIn == 0 || amountOut == 0) {
++            return 0;
++        }
+ 
+         synth.burn(_msgSender(), amountIn);
+         underlying.safeTransfer(receiver, amountOut);
+@@ -47,8 +77,15 @@ contract PegStabilityModule is EVCUtil {
+         return amountOut;
+     }
+ 
++    /// @notice Swaps the given amount of synth to underlying given an output amount of underlying.
++    /// @param amountOut The amount of underlying to receive.
++    /// @param receiver The address to receive the underlying.
++    /// @return The amount of synth swapped.
+     function swapToUnderlyingGivenOut(uint256 amountOut, address receiver) external returns (uint256) {
+         uint256 amountIn = quoteToUnderlyingGivenOut(amountOut);
++        if (amountIn == 0 || amountOut == 0) {
++            return 0;
++        }
+ 
+         synth.burn(_msgSender(), amountIn);
+         underlying.safeTransfer(receiver, amountOut);
+@@ -56,8 +93,15 @@ contract PegStabilityModule is EVCUtil {
+         return amountIn;
+     }
+ 
++    /// @notice Swaps the given amount of underlying to synth given an input amount of underlying.
++    /// @param amountIn The amount of underlying to swap.
++    /// @param receiver The address to receive the synth.
++    /// @return The amount of synth received.
+     function swapToSynthGivenIn(uint256 amountIn, address receiver) external returns (uint256) {
+         uint256 amountOut = quoteToSynthGivenIn(amountIn);
++        if (amountIn == 0 || amountOut == 0) {
++            return 0;
++        }
+ 
+         underlying.safeTransferFrom(_msgSender(), address(this), amountIn);
+         synth.mint(receiver, amountOut);
+@@ -65,8 +109,15 @@ contract PegStabilityModule is EVCUtil {
+         return amountOut;
+     }
+ 
++    /// @notice Swaps the given amount of underlying to synth given an output amount of synth.
++    /// @param amountOut The amount of synth to receive.
++    /// @param receiver The address to receive the synth.
++    /// @return The amount of underlying swapped.
+     function swapToSynthGivenOut(uint256 amountOut, address receiver) external returns (uint256) {
+         uint256 amountIn = quoteToSynthGivenOut(amountOut);
++        if (amountIn == 0 || amountOut == 0) {
++            return 0;
++        }
+ 
+         underlying.safeTransferFrom(_msgSender(), address(this), amountIn);
+         synth.mint(receiver, amountOut);
+@@ -74,19 +125,31 @@ contract PegStabilityModule is EVCUtil {
+         return amountIn;
+     }
+ 
++    /// @notice Quotes the amount of underlying given an input amount of synth.
++    /// @param amountIn The amount of synth to swap.
++    /// @return The amount of underlying received.
+     function quoteToUnderlyingGivenIn(uint256 amountIn) public view returns (uint256) {
+-        return amountIn * (BPS_SCALE - TO_UNDERLYING_FEE) / BPS_SCALE;
++        return amountIn * (BPS_SCALE - TO_UNDERLYING_FEE) * conversionPrice / BPS_SCALE / PRICE_SCALE;
+     }
+ 
++    /// @notice Quotes the amount of underlying given an output amount of synth.
++    /// @param amountOut The amount of underlying to receive.
++    /// @return The amount of synth swapped.
+     function quoteToUnderlyingGivenOut(uint256 amountOut) public view returns (uint256) {
+-        return amountOut * BPS_SCALE / (BPS_SCALE - TO_UNDERLYING_FEE);
++        return amountOut * BPS_SCALE * PRICE_SCALE / (BPS_SCALE - TO_UNDERLYING_FEE) / conversionPrice;
+     }
+ 
++    /// @notice Quotes the amount of synth given an input amount of underlying.
++    /// @param amountIn The amount of underlying to swap.
++    /// @return The amount of synth received.
+     function quoteToSynthGivenIn(uint256 amountIn) public view returns (uint256) {
+-        return amountIn * (BPS_SCALE - TO_SYNTH_FEE) / BPS_SCALE;
++        return amountIn * (BPS_SCALE - TO_SYNTH_FEE) * PRICE_SCALE / BPS_SCALE / conversionPrice;
+     }
+ 
++    /// @notice Quotes the amount of synth given an output amount of underlying.
++    /// @param amountOut The amount of synth to receive.
++    /// @return The amount of underlying swapped.
+     function quoteToSynthGivenOut(uint256 amountOut) public view returns (uint256) {
+-        return amountOut * BPS_SCALE / (BPS_SCALE - TO_SYNTH_FEE);
++        return amountOut * BPS_SCALE * conversionPrice / (BPS_SCALE - TO_SYNTH_FEE) / PRICE_SCALE;
+     }
+ }
+diff --git a/src/interfaces/IBalanceTracker.sol b/src/interfaces/IBalanceTracker.sol
+index 93dd6de..ae3f899 100644
+--- a/src/interfaces/IBalanceTracker.sol
++++ b/src/interfaces/IBalanceTracker.sol
+@@ -1,16 +1,20 @@
+ // SPDX-License-Identifier: GPL-2.0-or-later
+ 
+-pragma solidity ^0.8.0;
++pragma solidity >=0.8.0;
+ 
+ /// @title IBalanceTracker
++/// @custom:security-contact security@euler.xyz
+ /// @author Euler Labs (https://www.eulerlabs.com/)
+-/// @notice Provides an interface for tracking the balance of accounts
++/// @notice Provides an interface for tracking the balance of accounts.
+ interface IBalanceTracker {
+-    /// @notice Executes the balance tracking hook for an account
+-    /// @dev This function is called by the Balance Forwarder contract which was enabled for the account
+-    /// @dev To prevent DOS attacks, forfeitRecentReward should be used appropriately
+-    /// @param account The account address to execute the hook for
+-    /// @param newAccountBalance The new balance of the account
+-    /// @param forfeitRecentReward Whether to forfeit the most recent reward and not update the accumulator
++    /// @notice Executes the balance tracking hook for an account.
++    /// @dev This function is called by the Balance Forwarder contract which was enabled for the account. This function
++    /// must be called with the current balance of the account when enabling the balance forwarding for it. This
++    /// function must be called with 0 balance of the account when disabling the balance forwarding for it. This
++    /// function allows to be called on zero balance transfers, when the newAccountBalance is the same as the previous
++    /// one. To prevent DOS attacks, forfeitRecentReward should be used appropriately.
++    /// @param account The account address to execute the hook for.
++    /// @param newAccountBalance The new balance of the account.
++    /// @param forfeitRecentReward Whether to forfeit the most recent reward and not update the accumulator.
+     function balanceTrackerHook(address account, uint256 newAccountBalance, bool forfeitRecentReward) external;
+ }
+diff --git a/src/interfaces/IFlashLoan.sol b/src/interfaces/IFlashLoan.sol
+index f85f4a9..9ce9810 100644
+--- a/src/interfaces/IFlashLoan.sol
++++ b/src/interfaces/IFlashLoan.sol
+@@ -1,8 +1,13 @@
+ // SPDX-License-Identifier: GPL-2.0-or-later
+ 
+-pragma solidity ^0.8.0;
++pragma solidity >=0.8.0;
+ 
++/// @title IFlashLoan
++/// @custom:security-contact security@euler.xyz
++/// @author Euler Labs (https://www.eulerlabs.com/)
+ /// @notice Definition of callback method that flashLoan will invoke on your contract
+ interface IFlashLoan {
++    /// @notice Function that will be called on the caller of `flashloan`
++    /// @param data Data that was passed to the `flashloan` call
+     function onFlashLoan(bytes memory data) external;
+ }
+diff --git a/src/interfaces/IHookTarget.sol b/src/interfaces/IHookTarget.sol
+index 702f5e0..45ef3ac 100644
+--- a/src/interfaces/IHookTarget.sol
++++ b/src/interfaces/IHookTarget.sol
+@@ -1,9 +1,10 @@
+ // SPDX-License-Identifier: GPL-2.0-or-later
+ 
+-pragma solidity ^0.8.0;
++pragma solidity >=0.8.0;
+ 
+ /// @title IHookTarget
+ /// @author Euler Labs (https://www.eulerlabs.com/)
++/// @custom:security-contact security@euler.xyz
+ /// @notice Provides an interface for the hook target contract
+ interface IHookTarget {
+     /// @notice If given contract is a hook target, it is expected to return the bytes4 magic value that is the selector
+diff --git a/src/interfaces/IPermit2.sol b/src/interfaces/IPermit2.sol
+index d92aa27..c089982 100644
+--- a/src/interfaces/IPermit2.sol
++++ b/src/interfaces/IPermit2.sol
+@@ -1,7 +1,16 @@
+ // SPDX-License-Identifier: GPL-2.0-or-later
+ 
+-pragma solidity ^0.8.0;
++pragma solidity >=0.8.0;
+ 
++/// @title IPermit2
++/// @custom:security-contact security@euler.xyz
++/// @author Euler Labs (https://www.eulerlabs.com/)
++/// @notice A minimal interface of the Uniswap's Permit2 contract
+ interface IPermit2 {
++    /// @notice Transfer tokens between two accounts
++    /// @param from The account to send the tokens from
++    /// @param to The account to send the tokens to
++    /// @param amount Amount of tokens to send
++    /// @param token Address of the token contract
+     function transferFrom(address from, address to, uint160 amount, address token) external;
+ }
+diff --git a/src/interfaces/IPriceOracle.sol b/src/interfaces/IPriceOracle.sol
+index 228e043..986d645 100644
+--- a/src/interfaces/IPriceOracle.sol
++++ b/src/interfaces/IPriceOracle.sol
+@@ -1,18 +1,31 @@
+ // SPDX-License-Identifier: GPL-2.0-or-later
+ 
+-pragma solidity ^0.8.0;
++pragma solidity >=0.8.0;
+ 
++/// @title IPriceOracle
++/// @custom:security-contact security@euler.xyz
++/// @author Euler Labs (https://www.eulerlabs.com/)
++/// @notice Common PriceOracle interface.
+ interface IPriceOracle {
++    /// @notice Get the name of the oracle.
++    /// @return The name of the oracle.
+     function name() external view returns (string memory);
+ 
+-    function getQuote(uint256 amount, address base, address quote) external view returns (uint256 out);
+-    function getQuotes(uint256 amount, address base, address quote)
++    /// @notice One-sided price: How much quote token you would get for inAmount of base token, assuming no price spread.
++    /// @param inAmount The amount of `base` to convert.
++    /// @param base The token that is being priced.
++    /// @param quote The token that is the unit of account.
++    /// @return outAmount The amount of `quote` that is equivalent to `inAmount` of `base`.
++    function getQuote(uint256 inAmount, address base, address quote) external view returns (uint256 outAmount);
++
++    /// @notice Two-sided price: How much quote token you would get/spend for selling/buying inAmount of base token.
++    /// @param inAmount The amount of `base` to convert.
++    /// @param base The token that is being priced.
++    /// @param quote The token that is the unit of account.
++    /// @return bidOutAmount The amount of `quote` you would get for selling `inAmount` of `base`.
++    /// @return askOutAmount The amount of `quote` you would spend for buying `inAmount` of `base`.
++    function getQuotes(uint256 inAmount, address base, address quote)
+         external
+         view
+-        returns (uint256 bidOut, uint256 askOut);
+-
+-    error PO_BaseUnsupported();
+-    error PO_QuoteUnsupported();
+-    error PO_Overflow();
+-    error PO_NoPath();
++        returns (uint256 bidOutAmount, uint256 askOutAmount);
+ }
+diff --git a/src/interfaces/ISequenceRegistry.sol b/src/interfaces/ISequenceRegistry.sol
+new file mode 100644
+index 0000000..a007243
+--- /dev/null
++++ b/src/interfaces/ISequenceRegistry.sol
+@@ -0,0 +1,14 @@
++// SPDX-License-Identifier: GPL-2.0-or-later
++
++pragma solidity >=0.8.0;
++
++/// @title ISequenceRegistry
++/// @custom:security-contact security@euler.xyz
++/// @author Euler Labs (https://www.eulerlabs.com/)
++/// @notice Provides an interface for reserving sequence IDs.
++interface ISequenceRegistry {
++    /// @notice Reserve an ID for a given designator
++    /// @param designator An opaque string that corresponds to the sequence counter to be used
++    /// @return Sequence ID
++    function reserveSeqId(string calldata designator) external returns (uint256);
++}
