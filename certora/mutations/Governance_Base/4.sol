@@ -388,7 +388,7 @@ abstract contract GovernanceModule is IGovernance, BalanceUtils, BorrowUtils, LT
         }
 
 
-/**************************** Diff Block Start ****************************
+/**************************** Mutation Diff Block Start ****************************
 diff --git a/src/EVault/modules/Governance.sol b/src/EVault/modules/Governance.sol
 index 0b5ade0..79c8452 100644
 --- a/src/EVault/modules/Governance.sol
@@ -402,7 +402,7 @@ index 0b5ade0..79c8452 100644
  }
  
  /// @dev Deployable module contract
-**************************** Diff Block End *****************************/
+**************************** Mutation Diff Block End *****************************/
 
         vaultStorage.interestFee = newInterestFee.toConfigAmount();
 

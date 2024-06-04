@@ -205,7 +205,7 @@ abstract contract GovernanceModule is IGovernance, BalanceUtils, BorrowUtils, LT
     /// @inheritdoc IGovernance
     function permit2Address() public view virtual reentrantOK returns (address) {
 
-/**************************** Diff Block Start ****************************
+/**************************** Mutation Diff Block Start ****************************
 diff --git a/src/EVault/modules/Governance.sol b/src/EVault/modules/Governance.sol
 index 0b5ade0..2d9ed05 100644
 --- a/src/EVault/modules/Governance.sol
@@ -219,7 +219,7 @@ index 0b5ade0..2d9ed05 100644
          (VaultCache memory vaultCache, address account) = initOperation(OP_CONVERT_FEES, CHECKACCOUNT_NONE);
  
          if (vaultCache.accumulatedFees.isZero()) return;
-**************************** Diff Block End *****************************/
+**************************** Mutation Diff Block End *****************************/
 
         return permit2;
     }

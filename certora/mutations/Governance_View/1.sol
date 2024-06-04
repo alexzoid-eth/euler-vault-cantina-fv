@@ -168,7 +168,7 @@ abstract contract GovernanceModule is IGovernance, BalanceUtils, BorrowUtils, LT
     /// @inheritdoc IGovernance
     function maxLiquidationDiscount() public view virtual reentrantOK returns (uint16) {
 
-/**************************** Diff Block Start ****************************
+/**************************** Mutation Diff Block Start ****************************
 diff --git a/src/EVault/modules/Governance.sol b/src/EVault/modules/Governance.sol
 index 0b5ade0..547ce68 100644
 --- a/src/EVault/modules/Governance.sol
@@ -182,7 +182,7 @@ index 0b5ade0..547ce68 100644
          return vaultStorage.liquidationCoolOffTime;
      }
  
-**************************** Diff Block End *****************************/
+**************************** Mutation Diff Block End *****************************/
 
         return vaultStorage.maxLiquidationDiscount.toUint16();
     }

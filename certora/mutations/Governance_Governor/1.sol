@@ -310,7 +310,7 @@ abstract contract GovernanceModule is IGovernance, BalanceUtils, BorrowUtils, LT
         vaultStorage.ltvLookup[collateral].clear();
 
 
-/**************************** Diff Block Start ****************************
+/**************************** Mutation Diff Block Start ****************************
 diff --git a/src/EVault/modules/Governance.sol b/src/EVault/modules/Governance.sol
 index 0b5ade0..491a41c 100644
 --- a/src/EVault/modules/Governance.sol
@@ -324,7 +324,7 @@ index 0b5ade0..491a41c 100644
          vaultStorage.maxLiquidationDiscount = newDiscount.toConfigAmount();
          emit GovSetMaxLiquidationDiscount(newDiscount);
      }
-**************************** Diff Block End *****************************/
+**************************** Mutation Diff Block End *****************************/
 
         emit GovSetLTV(collateral, 0, 0, originalLTV, 0, 0, false);
     }

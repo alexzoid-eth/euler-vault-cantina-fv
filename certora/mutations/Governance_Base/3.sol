@@ -264,7 +264,7 @@ abstract contract GovernanceModule is IGovernance, BalanceUtils, BorrowUtils, LT
     /// would pose a threat to the vault's solvency.
     /// In any case, when the liquidation LTV reaches its target of 0, this asset will no longer support the debt, but it will still be possible to
 
-/**************************** Diff Block Start ****************************
+/**************************** Mutation Diff Block Start ****************************
 diff --git a/src/EVault/modules/Governance.sol b/src/EVault/modules/Governance.sol
 index 0b5ade0..cb0bb27 100644
 --- a/src/EVault/modules/Governance.sol
@@ -277,7 +277,7 @@ index 0b5ade0..cb0bb27 100644
          governorOnly
      {
          // self-collateralization is not allowed
-**************************** Diff Block End *****************************/
+**************************** Mutation Diff Block End *****************************/
 
     /// liquidate it at a discount and use the proceeds to repay an unhealthy loan.
     function setLTV(address collateral, uint16 borrowLTV, uint16 liquidationLTV, uint32 rampDuration)

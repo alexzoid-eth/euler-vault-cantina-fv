@@ -27,7 +27,7 @@ add_diff_block() {
         local adjusted_line_number=$((first_change_line_number - 1))
 
         # Insert the git diff block above the adjusted line number
-        awk -v n="$adjusted_line_number" -v diff_block="$git_diff_block" 'NR==n {print "\n/**************************** Diff Block Start ****************************\n"diff_block"\n**************************** Diff Block End *****************************/\n"} 1' "$temp_file" > temp && mv temp "$temp_file"
+        awk -v n="$adjusted_line_number" -v diff_block="$git_diff_block" 'NR==n {print "\n/**************************** Mutation Diff Block Start ****************************\n"diff_block"\n**************************** Mutation Diff Block End *****************************/\n"} 1' "$temp_file" > temp && mv temp "$temp_file"
 
     fi
 

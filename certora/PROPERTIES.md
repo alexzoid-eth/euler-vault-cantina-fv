@@ -39,12 +39,12 @@ Additionally, each property is assigned a mutation status:
 | GOV-06 | Governor's functions cannot be executed from `EVC` when control collateral is in progress |  | EVCClient | `governorOnly` |  |  |
 | GOV-07 | When the sender is not `EVC`, the governor's address is set as `msg.sender` |  | EVCClient | `governorOnly` |  |  |
 | GOV-08 | Governor's functions don't process any additional check in `EVC` when the sender is not `EVC` |  | EVCClient | `governorOnly` |  |  |
-| GOV-74 | Specific functions can modify state |  | Base |  | [Governance_Base/1.sol](mutations/Governance_Base/1.sol) | ✅ |
-| GOV-09 | Specific functions require a vault status check |  | Base |  | [Governance_Base/2.sol](mutations/Governance_Base/2.sol) | ✅ |
+| GOV-74 | Specific functions can modify state |  | Base |  | [Governance_Base/1.sol](mutations/Governance_Base/1.sol) | ✅❎ |
+| GOV-09 | Specific functions require a vault status check |  | Base |  | [Governance_Base/2.sol](mutations/Governance_Base/2.sol) | ✅❎ |
 | GOV-10 | Specific functions execute a hook |  | Base |  |  |  |
 | GOV-11 | Vault's storage can be updated from cache when specific functions are executed |  | Base |  |  |  |
-| GOV-12 | State change functions are protected against reentrancy |  | Base |  | [Governance_Base/3.sol](mutations/Governance_Base/3.sol) | ✅ |
-| GOV-13 | Functions are not able to receive native tokens |  | Base |  | [Governance_Base/4.sol](mutations/Governance_Base/4.sol) | ✅ |
+| GOV-12 | State change functions are protected against reentrancy |  | Base |  | [Governance_Base/3.sol](mutations/Governance_Base/3.sol) | ✅❎ |
+| GOV-13 | Functions are not able to receive native tokens |  | Base |  | [Governance_Base/4.sol](mutations/Governance_Base/4.sol) | ✅❎ |
 | GOV-14 | As the snapshot is used only to verify that supply increased when checking the supply cap, the snapshot is disabled if both caps are disabled |  | Base |  |  |  |
 | GOV-15 | Snapshot is set only once in batch operations, with cash and total borrow assets, rounded up |  | Base |  |  |  |
 | GOV-16 | Anyone can execute view functions |  | View | View functions | [Governance_View/1.sol](mutations/Governance_View/1.sol) | ✅❎ |

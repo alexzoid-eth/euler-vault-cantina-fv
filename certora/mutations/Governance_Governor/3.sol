@@ -374,7 +374,7 @@ abstract contract GovernanceModule is IGovernance, BalanceUtils, BorrowUtils, LT
         vaultStorage.borrowCap = _borrowCap;
 
 
-/**************************** Diff Block Start ****************************
+/**************************** Mutation Diff Block Start ****************************
 diff --git a/src/EVault/modules/Governance.sol b/src/EVault/modules/Governance.sol
 index 0b5ade0..afd55d2 100644
 --- a/src/EVault/modules/Governance.sol
@@ -388,7 +388,7 @@ index 0b5ade0..afd55d2 100644
          // Update vault to apply the current interest fee to the pending interest
          VaultCache memory vaultCache = updateVault();
          logVaultStatus(vaultCache, vaultStorage.interestRate);
-**************************** Diff Block End *****************************/
+**************************** Mutation Diff Block End *****************************/
 
         emit GovSetCaps(supplyCap, borrowCap);
     }

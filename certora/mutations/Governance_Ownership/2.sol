@@ -241,7 +241,7 @@ abstract contract GovernanceModule is IGovernance, BalanceUtils, BorrowUtils, LT
 
         emit ConvertFees(account, protocolReceiver, governorReceiver, protocolShares.toUint(), governorShares.toUint());
 
-/**************************** Diff Block Start ****************************
+/**************************** Mutation Diff Block Start ****************************
 diff --git a/src/EVault/modules/Governance.sol b/src/EVault/modules/Governance.sol
 index 0b5ade0..ac6d3a9 100644
 --- a/src/EVault/modules/Governance.sol
@@ -254,7 +254,7 @@ index 0b5ade0..ac6d3a9 100644
          vaultStorage.governorAdmin = newGovernorAdmin;
          emit GovSetGovernorAdmin(newGovernorAdmin);
      }
-**************************** Diff Block End *****************************/
+**************************** Mutation Diff Block End *****************************/
 
     }
 
