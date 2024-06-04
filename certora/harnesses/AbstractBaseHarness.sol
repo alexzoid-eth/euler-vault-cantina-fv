@@ -83,4 +83,15 @@ abstract contract AbstractBaseHarness is Base {
     }
 
 
+    //--------------------------------------------------------------------------
+    // Storage viewers
+    //--------------------------------------------------------------------------
+    function reentrancyLocked() public view returns (bool) {
+        return vaultStorage.reentrancyLocked;
+    }
+
+    function hookTarget() public view returns (address) {
+        return vaultStorage.hookTarget;
+    }
+
 }
