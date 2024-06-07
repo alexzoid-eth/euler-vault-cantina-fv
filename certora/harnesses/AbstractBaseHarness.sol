@@ -13,10 +13,6 @@ import "../../src/EVault/shared/Base.sol";
 // AbstractBase. AbstractBaseHarness includes the shared function definitions.
 abstract contract AbstractBaseHarness is Base {
 
-    function getLTVConfig(address collateral) external view returns (LTVConfig memory) {
-        return vaultStorage.ltvLookup[collateral];
-    }
-
     function vaultCacheOracleConfigured() external returns (bool) {
         return address(loadVault().oracle) != address(0);
     }
@@ -25,10 +21,6 @@ abstract contract AbstractBaseHarness is Base {
         return isAccountStatusCheckDeferred(account);
     }
     
-    function getBalanceAndForwarderExt(address account) public returns (Shares, bool) {
-        return vaultStorage.users[account].getBalanceAndBalanceForwarder();
-    }
-
     function getBalance(address account) public returns (uint256) {
         (Shares shares, ) = vaultStorage.users[account].getBalanceAndBalanceForwarder();
         return shares.toUint();

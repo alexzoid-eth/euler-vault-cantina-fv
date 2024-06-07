@@ -15,4 +15,12 @@ contract GovernanceHarness is Governance, AbstractBaseHarness {
         VaultCache memory vaultCache = updateVault();
         return vaultCache.accumulatedFees.toUint();
     }
+
+    function getLTVConfig(address collateral) external view returns (LTVConfig memory) {
+        return vaultStorage.ltvLookup[collateral];
+    }
+
+    function getBalanceAndForwarderExt(address account) public returns (Shares, bool) {
+        return vaultStorage.users[account].getBalanceAndBalanceForwarder();
+    }
 }

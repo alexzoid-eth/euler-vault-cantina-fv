@@ -1,9 +1,6 @@
-import "base/governor_harness_methods.spec";
+import "methods/governor_methods.spec";
 
 methods {
-    function governorAdmin() external returns (address) envfree;
-    function EVC() external returns (address) envfree;
-
     // EVC functions summarize (required the same results in governorOnly() modifier)
     function _.getCurrentOnBehalfOfAccount(address controllerToCheck) external => PER_CALLEE_CONSTANT;
     function _.getAccountOwner(address account) external => PER_CALLEE_CONSTANT;
@@ -78,3 +75,28 @@ rule onlyOneGovernorExists(env e1, env e2, method f, calldataarg args)
     // If the call with first sender was successful, than the call with another sender shound fail
     assert(!revertedGovernor => reverted);
 } 
+
+// GOV-20 | Governor's ownership can be transferred
+rule ownershipCanBeTransferred(env e, address newGovernorAdmin) {
+
+    address before = governorAdmin();
+    
+    setGovernorAdmin(e, newGovernorAdmin);
+
+    address after = governorAdmin();
+
+    assert(after == newGovernorAdmin);
+}
+
+// GOV-21 | The ownership could be revoked by setting the governor to zero address
+rule ownershipCanBeRevoked(env e, calldataarg args) {
+
+    address before = governorAdmin();
+    require(before != 0);
+
+    setGovernorAdmin(e, args);
+
+    address after = governorAdmin();
+
+    satisfy(after == 0);
+}

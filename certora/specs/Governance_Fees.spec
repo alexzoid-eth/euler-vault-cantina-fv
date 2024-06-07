@@ -1,22 +1,6 @@
-import "base/governor_harness_methods.spec";
+import "methods/governor_methods.spec";
 
 methods {
-
-    function isHookNotSetConvertFees() external returns (bool) envfree;
-    function accumulatedFees() external returns (uint256);
-    function getBalance(address account) external returns (uint256) envfree;
-    function isBalanceAndBalanceEnabled(address account) external returns (bool) envfree;
-    function totalShares() external returns (uint256);
-    function collateralExists(address collateral) external returns (bool) envfree;
-    function ltvListLength() external returns (uint256) envfree;
-
-    function feeReceiver() external returns (address) envfree;
-    function LTVFull(address collateral) external returns (uint16, uint16, uint16, uint48, uint32) envfree;
-    function LTVList() external returns (address[]) envfree;
-    function interestFee() external returns (uint16) envfree;
-    function maxLiquidationDiscount() external returns (uint16) envfree;
-    function interestRateModel() external returns (address) envfree;
-
     function _.protocolFeeConfig(address vault) external => protocolFeeConfigCVL(vault) expect (address, uint16) ALL;
 
     // EVC functions summarize (required the same results when comparing a storage)
@@ -408,7 +392,7 @@ rule feesIncreaseOverTime(env e1, env e2, method f1, method f2, calldataarg args
 invariant feesRetrievedForCurrentContract(env e) ghostProtocolFeeRequestedVault == currentContract
     filtered { f -> !HARNESS_METHODS(f) }
 
-// GOV-31 | The specified LTV is a fraction between 0 and 1 (scaled by 10,000)
+// @todo GOV-31 | The specified LTV is a fraction between 0 and 1 (scaled by 10,000)
 invariant ltvFractionScaled(env e, address collateral) to_mathint(LTVBorrow(e, collateral)) <= CONFIG_SCALE()
     && to_mathint(LTVLiquidation(e, collateral)) <= CONFIG_SCALE()
     filtered { f -> !HARNESS_METHODS(f) }

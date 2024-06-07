@@ -46,13 +46,14 @@ Additionally, each property is assigned a mutation status:
 | GOV-12 | State change functions are protected against reentrancy |  | Base |  | [Governance_Base/3.sol](mutations/Governance_Base/3.sol) | ✅❎ |
 | GOV-13 | Functions are not able to receive native tokens |  | Base |  | [Governance_Base/4.sol](mutations/Governance_Base/4.sol) | ✅❎ |
 | GOV-14 | As the snapshot is used only to verify that supply increased when checking the supply cap, the snapshot is disabled if both caps are disabled |  | Base |  |  |  |
+| GOV-49 | Specific functions can be disabled |  | Base |  |  |  |
 | GOV-15 | Snapshot is set only once in batch operations, with cash and total borrow assets, rounded up |  | Base |  |  |  |
-| GOV-16 | Anyone can execute view functions |  | View | View functions | [Governance_View/1.sol](mutations/Governance_View/1.sol) | ✅❎ |
-| GOV-17 | View functions MUST NOT be protected against reentrancy |  | View | View functions | [Governance_View/2.sol](mutations/Governance_View/2.sol) | ✅❎ |
-| GOV-18 | Ensure view functions integrity |  | View | View functions |  |  |
-| GOV-19 | View functions don't update state |  | View | View functions |  | ✅ |
-| GOV-20 | Governor's ownership can be transferred |  | Ownership | `setGovernorAdmin` | [Governance_Ownership/1.sol](mutations/Governance_Ownership/1.sol) | ✅❎ |
-| GOV-21 | The ownership could be revoked by setting the governor to zero address |  | Ownership | `setGovernorAdmin` | [Governance_Ownership/2.sol](mutations/Governance_Ownership/2.sol) | ✅❎ |
+| GOV-16 | Anyone can execute view functions |  | Base | View functions | [Governance_Base/5.sol](mutations/Governance_Base/5.sol) | ✅❎ |
+| GOV-17 | View functions MUST NOT be protected against reentrancy |  | Base | View functions | [Governance_Base/6.sol](mutations/Governance_Base/6.sol) | ✅❎ |
+| GOV-18 | Ensure view functions integrity |  | Base | View functions |  |  |
+| GOV-19 | View functions don't update state |  | Base | View functions |  | ✅ |
+| GOV-20 | Governor's ownership can be transferred |  | Governor | `setGovernorAdmin` | | ✅ |
+| GOV-21 | The ownership could be revoked by setting the governor to zero address |  | Governor | `setGovernorAdmin` | | ✅❎ |
 | GOV-22 | The fee receiver address can be changed |  | Fees | `setFeeReceiver` |  | ✅ |
 | GOV-23 | While distributing fees, external protocol config contract is used |  | Fees | `convertFees` | [Governance_Fees/1.sol](mutations/Governance_Fees/1.sol) | ✅❎ |
 | GOV-75 | Update the protocol (Euler DAO's) receiver and fee amount for the current contract MUST affect the state |  | Fees | `convertFees` | [Governance_Fees/2.sol](mutations/Governance_Fees/2.sol) | ❌|
@@ -66,7 +67,7 @@ Additionally, each property is assigned a mutation status:
 | GOV-28 | Fee shares cannot be transferred to the zero address |  | Fees | `convertFees` |  | ✅ |
 | GOV-29 | Accumulated fees only increase when some time has passed |  | Fees | `convertFees` |  | ✅ |
 | GOV-30 | Fees are retrieved only for the contract itself from the protocol config contract |  | Fees | `convertFees` |  | ✅ |
-| GOV-31 | The specified LTV is a fraction between 0 and 1 (scaled by 10,000) |  | Liquidation | `SetLTV` |  | ✅ |
+| GOV-31 | The specified LTV is a fraction between 0 and 1 (scaled by 10,000) |  | Liquidation | `SetLTV` |  | ❌ |
 | GOV-32 | Self-collateralization is not allowed |  | Liquidation | `SetLTV` |  | ✅ |
 | GOV-33 | The borrow LTV MUST be lower than or equal to the liquidation LTV |  | Liquidation | `SetLTV` |  | ✅ |
 | GOV-34 | Ramp duration can be used only when lowering liquidation LTV |  | Liquidation | `SetLTV` |  | ✅ |
@@ -85,7 +86,6 @@ Additionally, each property is assigned a mutation status:
 | GOV-46 | Zero timestamp means the LTV is cleared not set yet |  | Liquidation | `clearLTV` |  | ✅ |
 | GOV-47 |  |  | Liquidation | `clearLTV` |  |  |
 | GOV-48 | Config parameters are scaled to `1e4` |  | Liquidation | `setMaxLiquidationDiscount` |  | ✅ |
-| GOV-49 |  |  |  |  |  |  |
 | GOV-50 | The interest rate model can be changed |  | Interest | `setInterestRateModel` |  |  |
 | GOV-51 | Cached interest rate is cleared when the interest rate model is set |  | Interest | `setInterestRateModel` |  |  |
 | GOV-52 | While calculating the interest rate, the cached value will be used if the interest rate model is not set or the call to the interest rate model was not successful |  | Interest | `setInterestRateModel` |  |  |
@@ -114,25 +114,25 @@ Additionally, each property is assigned a mutation status:
 
 | Property | Description | Category | Tag | Entries | Mutation | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| VLT-01 | Specific functions require a vault status check |  | Base |  |  |  |
-| VLT-02 | Specific functions require a vault and account status check |  | Base |  |  |  |
+| VLT-01 | Specific functions require a vault status check |  | Base |  |  | ✅ |
+| VLT-02 | Specific functions require a vault and account status check |  | Base |  |  | ✅ |
 | VLT-03 | Specific functions execute a hook |  | Base | Specific functions |  |  |
+| VLT-09 | Specific functions can be disabled |  | Base | View functions |  |  |
 | VLT-04 | Vault's storage can be updated from cache when specific functions are executed |  | Base |  |  |  |
-| VLT-05 | State change functions are protected against reentrancy |  | Base |  |  |  |
-| VLT-06 | Functions are not able to receive native tokens |  | Base | Functions |  |  |
-| VLT-07 | Anyone can execute view functions |  | View | View functions |  |  |
-| VLT-08 | Specific view functions are protected against reentrancy, while others are not |  | View | View functions |  |  |
-| VLT-09 | Ensure view functions integrity |  | View | View functions |  |  |
-| VLT-10 | View functions don't update the state |  | View | View functions |  |  |
-| VLT-11 | Each vault holds exactly one creator |  | View | View functions |  |  |
-| VLT-12 | Some view functions can be disabled by the governor and MUST return zero |  | Hooks | `maxMint`, `maxWithdraw` |  |  |
-| VLT-13 | Functions are considered disabled if a hook has been installed for it and the hook target is zero address |  | Hooks |  |  |  |
-| VLT-14 | Hooks are not executed for disabled functions |  | Hooks | Disabled functions |  |  |
+| VLT-05 | State change functions are protected against reentrancy |  | Base |  |  | ✅ |
+| VLT-06 | Functions are not able to receive native tokens |  | Base | Functions |  | ✅ |
+| VLT-07 | Anyone can execute view functions |  | Base | View functions |  | ❌ |
+| VLT-08 | Specific view functions are protected against reentrancy, while others are not |  | Base | View functions |  | ✅ |
+| VLT-10 | View functions don't update the state |  | Base | View functions |  | ✅ |
+| VLT-12 | Some view functions can be disabled by the governor and MUST return zero |  | Base | `maxMint`, `maxWithdraw` |  |  |
+| VLT-13 | Functions are considered disabled if a hook has been installed for it and the hook target is zero address |  | Base |  |  |  |
+| VLT-14 | Hooks are not executed for disabled functions |  | Base | Disabled functions |  |  |
+| VLT-11 | Each vault holds exactly one creator |  | Convert | View functions |  |  |
 | VLT-15 | Each vault holds exactly one underlying asset |  | Convert | `asset` |  |  |
-| VLT-16 | Total assets are the sum of the vault's cash and the total borrows converted to assets |  | Convert | `totalAssets` |  |  |
+| VLT-16 | Total assets are the sum of the vault's cash and the total borrows converted to assets |  |  | `totalAssets` |  |  |
 | VLT-17 | Shares maximum amounts during calculations cannot exceed the max sane amount (`uint112` max) |  | Convert | `convertToAssets` |  |  |
 | VLT-18 | Assets maximum amounts during calculations cannot exceed the max sane amount (`uint112` max) |  | Convert | `convertToShares` |  |  |
-| VLT-19 | Accumulated fees MUST be converted to assets using rounding down |  | Fees | `accumulatedFeesAssets` |  |  |
+| VLT-19 | Accumulated fees MUST be converted to assets using rounding down |  | Convert | `accumulatedFeesAssets` |  |  |
 | VLT-20 | The number of assets required to deposit is always rounded down |  | Deposit | `previewDeposit` |  |  |
 | VLT-21 | Non-zero max deposit assets MUST not be zero when converted to shares down |  | Deposit | `maxDeposit` |  |  |
 | VLT-22 | User's max deposit could be zero even if the operation is enabled |  | Deposit | `maxDeposit` |  |  |
@@ -159,7 +159,7 @@ Additionally, each property is assigned a mutation status:
 | VLT-43 | Balance forwarder is never executed when the balance forwarder is not enabled |  | Deposit | `deposit`, `mint`, `skim`, `withdraw`, `redeem` |  |  |
 | VLT-44 | Balance forwarder can be executed only with specific functions |  | Deposit | `deposit`, `mint`, `skim`, `withdraw`, `redeem` |  |  |
 | VLT-45 | The balance tracker hook is called with `forfeitRecentReward` set to `false` when user's balance in increased |  | Deposit | `deposit`, `mint`, `skim` |  |  |
-| VLT-46 | The balance tracker hook is called with `forfeitRecentReward` set to `true` only when collateral control is in progress |  | Withdraw | `withdraw`, `redeem` |  |  |
+| VLT-46 | The balance tracker hook is called with `forfeitRecentReward` set to `true` only when collateral control is in progress |  | Deposit | `withdraw`, `redeem` |  |  |
 | VLT-47 | Zero mint amount do nothing and return zero |  | Deposit | `mint` |  |  |
 | VLT-48 | Shares are converted to assets using rounding up during minting |  | Deposit | `mint` |  |  |
 | VLT-49 | Only specific functions can increase a user's balance |  | Deposit | `deposit`, `mint`, `skim` |  |  |
@@ -196,6 +196,8 @@ Additionally, each property is assigned a mutation status:
 | VLT-80 | Withdraw and redeem decrease the vault's cash amount |  | Withdraw | `withdraw`, `redeem` |  |  |
 | VLT-81 | Assets cannot be withdrawn to the zero address |  | Withdraw | `withdraw`, `redeem` |  |  |
 | VLT-82 | Assets cannot be withdrawn or redeemed to sub-accounts when asset itself is NOT compatible with EVC |  | Withdraw | `withdraw`, `redeem` |  |  |
+| VLT-83 | User's balance MUST NOT increase after performing both input and output transactions within a single block |  | 1 | `deposit`, `mint`, `withdraw`, `redeem` |  |  |
+
 
 ## Borrowing
 
