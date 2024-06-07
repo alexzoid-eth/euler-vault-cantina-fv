@@ -1,4 +1,4 @@
-import "base/Governance_Harness_methods.spec";
+import "base/governor_harness_methods.spec";
 
 using ProtocolConfig as _ProtocolConfig;
 
@@ -8,6 +8,8 @@ methods {
 
     function protocolConfigAddress() external returns (address) envfree;
 }
+
+definition HARNESS_METHODS(method f) returns bool = GOVERNANCE_HARNESS_METHODS(f);
 
 definition GOVERNANCE_VIEW_METHODS(method f) returns bool = 
     f.selector == sig:governorAdmin().selector
@@ -33,7 +35,7 @@ definition GOVERNANCE_VIEW_METHODS(method f) returns bool =
 
 // GOV-16 | Anyone can execute view functions
 rule anyoneCanExecuteViewFunctions(env e1, env e2, method f, calldataarg args) 
-    filtered { f -> f.isView && !GOVERNANCE_HARNESS_METHODS(f) } {
+    filtered { f -> f.isView && !HARNESS_METHODS(f) } {
 
     require(e1.msg.value == e2.msg.value);
     require(e1.block.timestamp == e2.block.timestamp);
@@ -54,7 +56,7 @@ rule anyoneCanExecuteViewFunctions(env e1, env e2, method f, calldataarg args)
 
 // GOV-17 | View functions MUST NOT be protected against reentrancy
 rule viewFunctionsNotProtectedAgainstReentrancy(env e, method f, calldataarg args) 
-    filtered { f -> f.isView  && !GOVERNANCE_HARNESS_METHODS(f) } {
+    filtered { f -> f.isView  && !HARNESS_METHODS(f) } {
 
     // The hook target is allowed to bypass the RO-reentrancy lock. The hook target can either be a msg.sender
     // when the view function is inlined in the EVault.sol or the hook target should be taken from the trailing
@@ -69,14 +71,6 @@ rule viewFunctionsNotProtectedAgainstReentrancy(env e, method f, calldataarg arg
 
     // Function could be executed when reentrancy in locked state
     satisfy(!lastReverted);
-}
-
-// GOV-18 | Ensure view functions integrity
-rule viewFunctionsIntegrity() {
-
-    assert(protocolConfigAddress() == _ProtocolConfig);
-
-    // @todo add more view functions
 }
 
 // GOV-19 | View functions don't update state

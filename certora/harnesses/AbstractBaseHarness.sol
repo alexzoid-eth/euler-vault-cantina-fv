@@ -29,6 +29,16 @@ abstract contract AbstractBaseHarness is Base {
         return vaultStorage.users[account].getBalanceAndBalanceForwarder();
     }
 
+    function getBalance(address account) public returns (uint256) {
+        (Shares shares, ) = vaultStorage.users[account].getBalanceAndBalanceForwarder();
+        return shares.toUint();
+    }
+
+    function isBalanceAndBalanceEnabled(address account) public returns (bool) {
+        (, bool enabled) = vaultStorage.users[account].getBalanceAndBalanceForwarder();
+        return enabled;
+    }
+
 
     //--------------------------------------------------------------------------
     // Controllers
@@ -94,4 +104,32 @@ abstract contract AbstractBaseHarness is Base {
         return vaultStorage.hookTarget;
     }
 
+    function totalShares() public returns (uint256) {
+        VaultCache memory vaultCache = updateVault();
+        return vaultCache.totalShares.toUint();
+    }
+
+    //--------------------------------------------------------------------------
+    // Hooks set checks
+    //--------------------------------------------------------------------------
+    function isHookNotSetConvertFees() public view returns (bool) {
+        return vaultStorage.hookedOps.isNotSet(OP_CONVERT_FEES);
+    }
+
+    //--------------------------------------------------------------------------
+    // Utils
+    //--------------------------------------------------------------------------
+    function collateralExists(address collateral) public view returns (bool) {
+        uint256 length = vaultStorage.ltvList.length;
+        for (uint256 i; i < length; ++i) {
+            if (vaultStorage.ltvList[i] == collateral) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    function ltvListLength() public view returns (uint256) {
+        return vaultStorage.ltvList.length;
+    }
 }

@@ -1,4 +1,4 @@
-import "base/Governance_Harness_methods.spec";
+import "base/governor_harness_methods.spec";
 
 methods {
     function governorAdmin() external returns (address) envfree;
@@ -10,6 +10,8 @@ methods {
     function _.isOperatorAuthenticated() external => PER_CALLEE_CONSTANT;
     function _.isControlCollateralInProgress() external => PER_CALLEE_CONSTANT;
 }
+
+definition HARNESS_METHODS(method f) returns bool = GOVERNANCE_HARNESS_METHODS(f);
 
 definition GOVERNOR_ONLY_METHODS(method f) returns bool = 
     f.selector == sig:setGovernorAdmin(address).selector
@@ -41,7 +43,7 @@ rule governorOnlyMethods(env e, method f, calldataarg args)
 
 // GOV73 | Non-governor methods MUST be accessible to any callers
 rule governorOnlyNotAffectOtherMethods(env e, method f, calldataarg args) 
-    filtered { f -> !GOVERNOR_ONLY_METHODS(f) && !GOVERNANCE_HARNESS_METHODS(f) } {
+    filtered { f -> !GOVERNOR_ONLY_METHODS(f) && !HARNESS_METHODS(f) } {
 
     // In this case EVCAuthenticateGovernor() in governorOnly() modifier returns msg.sender
     require(!isSenderGovernor(e));

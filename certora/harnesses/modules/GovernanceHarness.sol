@@ -10,4 +10,9 @@ contract GovernanceHarness is Governance, AbstractBaseHarness {
     function isSenderGovernor() public view returns (bool) {
         return governorAdmin() == EVCAuthenticateGovernor();
     }
+
+    function accumulatedFees() public returns (uint256) {        
+        VaultCache memory vaultCache = updateVault();
+        return vaultCache.accumulatedFees.toUint();
+    }
 }

@@ -3,6 +3,8 @@ methods {
     function setGovernorAdmin(address newGovernorAdmin) external;  
 }
 
+definition HARNESS_METHODS(method f) returns bool = GOVERNANCE_HARNESS_METHODS(f);
+
 // GOV-20 | Governor's ownership can be transferred
 rule ownershipCanBeTransferred(env e, address newGovernorAdmin) {
 

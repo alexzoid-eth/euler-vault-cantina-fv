@@ -1,17 +1,7 @@
-import "base/Governance_Harness_methods.spec";
+import "base/governor_harness_methods.spec";
+import "base/base.spec";
 
-methods {
-
-    function reentrancyLocked() external returns (bool) envfree;
-
-    // EVC functions summarize
-    function _.requireVaultStatusCheck() external => requireVaultStatusCheckCVL() expect void;
-}
-
-persistent ghost bool ghostRequireVaultStatusCheckCalled;
-function requireVaultStatusCheckCVL() {
-    ghostRequireVaultStatusCheckCalled = true;
-}
+definition HARNESS_METHODS(method f) returns bool = GOVERNANCE_HARNESS_METHODS(f);
 
 definition MODIFY_STATE_METHODS(method f) returns bool = 
     f.selector == sig:setGovernorAdmin(address).selector
@@ -31,50 +21,16 @@ definition VAULT_STATUS_CHECK_METHODS(method f) returns bool =
     f.selector == sig:convertFees().selector;
 
 // GOV-74 | Specific functions can modify state
-rule specificFunctionsModifyState(env e, method f, calldataarg args) 
-    filtered { f -> !GOVERNANCE_HARNESS_METHODS(f) } {
-    
-    storage before = lastStorage;
+use rule specificFunctionsModifyState;
 
-    f(e, args);
-
-    storage after = lastStorage;
-
-    assert(before[currentContract] != after[currentContract] => MODIFY_STATE_METHODS(f));
-}
+// GOV-08 | Possibility of modifying state
+use rule modifyStatePossibility;
 
 // GOV-09 | Specific functions require a vault status check
-rule specificFunctionsRequireVaultStatusCheck(env e, method f, calldataarg args)
-    filtered { f -> !GOVERNANCE_HARNESS_METHODS(f) } {
-
-    require(ghostRequireVaultStatusCheckCalled == false);
-
-    f(e, args);
-    
-    assert(VAULT_STATUS_CHECK_METHODS(f) <=> ghostRequireVaultStatusCheckCalled);
-}
+use rule specificFunctionsRequireVaultStatusCheck;
 
 // GOV-12 | State change functions are protected against reentrancy
-rule stateChangeFunctionsReentrancyProtected(env e, method f, calldataarg args) 
-    filtered { f -> !GOVERNANCE_HARNESS_METHODS(f) } {
-
-    bool locked = reentrancyLocked();
-
-    storage before = lastStorage;
-
-    f(e, args);
-
-    storage after = lastStorage;
-
-    assert(before[currentContract] != after[currentContract] => !locked);
-}
+use rule stateChangeFunctionsReentrancyProtected;
 
 // GOV-13 | Functions are not able to receive native tokens
-rule notAbleReceiveNativeTokens(env e, method f, calldataarg args) 
-    filtered { f -> !GOVERNANCE_HARNESS_METHODS(f) } {
-
-    f@withrevert(e, args);
-
-    assert(e.msg.value != 0 => lastReverted);
-}
-
+use rule notAbleReceiveNativeTokens;

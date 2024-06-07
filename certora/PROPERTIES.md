@@ -3,10 +3,10 @@
 **Category**: List of properties following the categorization by [Certora](https://github.com/Certora/Tutorials/blob/master/06.Lesson_ThinkingProperties/Categorizing_Properties.pdf):
 
 - High Level
-- Valid States
-- State Transitions
-- Variable Transitions
-- Unit Tests
+- Valid State
+- State Transition
+- Variable Transition
+- Unit Test
 
 **Tag**: Represents the general area or feature the property relates to
 
@@ -38,7 +38,7 @@ Additionally, each property is assigned a mutation status:
 | GOV-05 | Governor's functions cannot be executed from `EVC` when an operator is authenticated |  | EVCClient | `governorOnly` |  |  |
 | GOV-06 | Governor's functions cannot be executed from `EVC` when control collateral is in progress |  | EVCClient | `governorOnly` |  |  |
 | GOV-07 | When the sender is not `EVC`, the governor's address is set as `msg.sender` |  | EVCClient | `governorOnly` |  |  |
-| GOV-08 | Governor's functions don't process any additional check in `EVC` when the sender is not `EVC` |  | EVCClient | `governorOnly` |  |  |
+| GOV-08 | Possibility of modifying state |  | Base |  |  | ✅ |
 | GOV-74 | Specific functions can modify state |  | Base |  | [Governance_Base/1.sol](mutations/Governance_Base/1.sol) | ✅❎ |
 | GOV-09 | Specific functions require a vault status check |  | Base |  | [Governance_Base/2.sol](mutations/Governance_Base/2.sol) | ✅❎ |
 | GOV-10 | Specific functions execute a hook |  | Base |  |  |  |
@@ -49,38 +49,43 @@ Additionally, each property is assigned a mutation status:
 | GOV-15 | Snapshot is set only once in batch operations, with cash and total borrow assets, rounded up |  | Base |  |  |  |
 | GOV-16 | Anyone can execute view functions |  | View | View functions | [Governance_View/1.sol](mutations/Governance_View/1.sol) | ✅❎ |
 | GOV-17 | View functions MUST NOT be protected against reentrancy |  | View | View functions | [Governance_View/2.sol](mutations/Governance_View/2.sol) | ✅❎ |
-| GOV-18 | Ensure view functions integrity |  | View | View functions |  | 📝 |
+| GOV-18 | Ensure view functions integrity |  | View | View functions |  |  |
 | GOV-19 | View functions don't update state |  | View | View functions |  | ✅ |
 | GOV-20 | Governor's ownership can be transferred |  | Ownership | `setGovernorAdmin` | [Governance_Ownership/1.sol](mutations/Governance_Ownership/1.sol) | ✅❎ |
 | GOV-21 | The ownership could be revoked by setting the governor to zero address |  | Ownership | `setGovernorAdmin` | [Governance_Ownership/2.sol](mutations/Governance_Ownership/2.sol) | ✅❎ |
-| GOV-22 | The fee receiver address can be changed |  | Fees | `setFeeReceiver` |  |  |
-| GOV-23 | While distributing fees, the protocol (Euler DAO's) receiver and fee amount are extracted from the protocol config contract |  | Fees | `convertFees` |  |  |
-| GOV-24 | If the governor receiver was not set, the protocol gets all fees |  | Fees | `convertFees` |  |  |
-| GOV-25 | Protocol's fee share cannot be more than the max protocol fee share (50%) |  | Fees | `convertFees` |  |  |
-| GOV-26 | While distributing fees, total shares are decreased by the accumulated fees and accumulated fees are cleared |  | Fees | `convertFees` |  |  |
-| GOV-27 | While distributing fees, shares are transferred to governor and protocol fee receiver addresses |  | Fees | `convertFees` |  |  |
-| GOV-28 | Fee shares cannot be transferred to the zero address |  | Fees | `convertFees` |  |  |
-| GOV-29 | Accumulated fees only increase when some time has passed |  | Fees | `convertFees` |  |  |
-| GOV-30 | Fees are retrieved only for the contract itself from the protocol config contract |  | Fees | `convertFees` |  |  |
-| GOV-31 | The specified LTV is a fraction between 0 and 1 (scaled by 10,000) |  | Liquidation | `SetLTV` |  |  |
-| GOV-32 | Self-collateralization is not allowed |  | Liquidation | `SetLTV` |  |  |
-| GOV-33 | The borrow LTV must be lower than or equal to the liquidation LTV |  | Liquidation | `SetLTV` |  |  |
-| GOV-34 | Ramp duration can be used only when lowering liquidation LTV |  | Liquidation | `SetLTV` |  |  |
-| GOV-35 | The LTV can be set for a collateral asset, including borrow LTV, liquidation LTV, and ramp duration |  | Liquidation | `SetLTV` |  |  |
-| GOV-36 | All collateral entries in the vault storage LTV list must be unique |  | Liquidation | `SetLTV` |  |  |
-| GOV-37 | The LTV is always initialized when set |  | Liquidation | `SetLTV` |  |  |
-| GOV-38 | An empty LTV should not be initialized |  | Liquidation | `SetLTV` |  |  |
-| GOV-39 | LTV's timestamp is always less than or equal to the current timestamp |  | Liquidation | `SetLTV` |  |  |
-| GOV-40 | Setting the LTV updates the target timestamp to the current time plus the ramp duration |  | Liquidation | `SetLTV` |  |  |
-| GOV-41 | Initial liquidation LTV is always the previous liquidation LTV or zero |  | Liquidation | `SetLTV` |  |  |
-| GOV-42 | LTV can be increased or decreased immediately |  | Liquidation | `SetLTV` |  |  |
-| GOV-43 | Liquidation LTV is calculated dynamically only when ramping is in progress (target timestamp is in the future and liquidation LTV is less than the initial liquidation LTV) |  | Liquidation | `SetLTV` |  |  |
-| GOV-44 | Dynamically calculated liquidation LTV is always between the target liquidation LTV and the initial liquidation LTV |  | Liquidation | `SetLTV` |  |  |
-| GOV-45 | When ramping is in progress, the time remaining is always less than or equal to the ramp duration |  | Liquidation | `SetLTV` |  |  |
-| GOV-46 | LTV setting can be set to 0 |  | Liquidation | `clearLTV` |  |  |
-| GOV-47 | Clearing the LTV configuration sets the borrow LTV, liquidation LTV, initial liquidation LTV, timestamp, and ramp duration to zero |  | Liquidation | `clearLTV` |  |  |
-| GOV-48 | The maximum liquidation discount can be changed |  | Liquidation | `setMaxLiquidationDiscount` |  |  |
-| GOV-49 | The liquidation cool off time can be changed |  | Liquidation | `setLiquidationCoolOffTime` |  |  |
+| GOV-22 | The fee receiver address can be changed |  | Fees | `setFeeReceiver` |  | ✅ |
+| GOV-23 | While distributing fees, external protocol config contract is used |  | Fees | `convertFees` | [Governance_Fees/1.sol](mutations/Governance_Fees/1.sol) | ✅❎ |
+| GOV-75 | Update the protocol (Euler DAO's) receiver and fee amount for the current contract MUST affect the state |  | Fees | `convertFees` | [Governance_Fees/2.sol](mutations/Governance_Fees/2.sol) | ❌|
+| GOV-76 | Update the protocol (Euler DAO's) receiver and fee amount for another contract MUST NOT affect the state |  | Fees | `convertFees` | [Governance_Fees/2.sol](mutations/Governance_Fees/2.sol) | ✅❎ |
+| GOV-77 | The governor fee receiver can be disabled |  | Fees | `setFeeReceiver` | [Governance_Fees/3.sol](mutations/Governance_Fees/3.sol) | ✅❎ |
+| GOV-24 | If the governor receiver was not set, the protocol gets all fees |  | Fees | `convertFees` |  | ✅ |
+| GOV-25 | Protocol's fee share MUST NOT be more than the max protocol fee share (50%) |  | Fees | `convertFees` |  | ✅ |
+| GOV-26 | While distributing fees, total shares MUST not changed and accumulated fees are cleared |  | Fees | `convertFees` |  | ✅ |
+| GOV-78 | Accumulated fees MUST be less or equal total shares | Valid State | Fees | `convertFees` |  | ✅ |
+| GOV-27 | While distributing fees, shares are transferred to governor and protocol fee receiver addresses |  | Fees | `convertFees` |  | ✅ |
+| GOV-28 | Fee shares cannot be transferred to the zero address |  | Fees | `convertFees` |  | ✅ |
+| GOV-29 | Accumulated fees only increase when some time has passed |  | Fees | `convertFees` |  | ✅ |
+| GOV-30 | Fees are retrieved only for the contract itself from the protocol config contract |  | Fees | `convertFees` |  | ✅ |
+| GOV-31 | The specified LTV is a fraction between 0 and 1 (scaled by 10,000) |  | Liquidation | `SetLTV` |  | ✅ |
+| GOV-32 | Self-collateralization is not allowed |  | Liquidation | `SetLTV` |  | ✅ |
+| GOV-33 | The borrow LTV MUST be lower than or equal to the liquidation LTV |  | Liquidation | `SetLTV` |  | ✅ |
+| GOV-34 | Ramp duration can be used only when lowering liquidation LTV |  | Liquidation | `SetLTV` |  | ✅ |
+| GOV-35 | The LTV can be set for a collateral asset, including borrow LTV, liquidation LTV, and ramp duration |  | Liquidation | `SetLTV` |  | ✅ |
+| GOV-36 | All collateral entries in the vault storage LTV list MUST be unique |  | Liquidation | `SetLTV` |  | ✅ |
+| GOV-37 | The LTV is always initialized when set |  | Liquidation | `SetLTV` |  | ✅ |
+| GOV-79 | Collateral LTV MUST NOT be removed completely |  | Liquidation | `SetLTV` |  | ✅ |
+| GOV-38 | LTV with zero timestamp should not be initialized and vice versa |  | Liquidation | `SetLTV` |  | ✅ |
+| GOV-39 | LTV's timestamp is always less than or equal to the current timestamp |  | Liquidation | `SetLTV` |  | ✅ |
+| GOV-40 | LTV's timestamp MUST be in the future only when ramping set |  | Liquidation | `SetLTV` |  | ✅ |
+| GOV-41 | Initial liquidation LTV is always the previous liquidation LTV or greater than liquidation LTV when ramping |  | Liquidation | `SetLTV` |  | ❌ |
+| GOV-42 | LTV can be increased or decreased immediately |  | Liquidation | `SetLTV` |  | ✅ |
+| GOV-43 | Liquidation LTV is calculated dynamically only when ramping is in progress (target timestamp is in the future and liquidation LTV is less than the initial liquidation LTV) |  | Liquidation | `SetLTV` |  | ❌ |
+| GOV-44 | Initialized LTV exists in collaterals list |  | Liquidation | `SetLTV` |  | ✅ |
+| GOV-45 | When ramping is in progress, the time remaining is always less than or equal to the ramp duration |  | Liquidation | `SetLTV` |  |  ❌|
+| GOV-46 | Zero timestamp means the LTV is cleared not set yet |  | Liquidation | `clearLTV` |  | ✅ |
+| GOV-47 |  |  | Liquidation | `clearLTV` |  |  |
+| GOV-48 | Config parameters are scaled to `1e4` |  | Liquidation | `setMaxLiquidationDiscount` |  | ✅ |
+| GOV-49 |  |  |  |  |  |  |
 | GOV-50 | The interest rate model can be changed |  | Interest | `setInterestRateModel` |  |  |
 | GOV-51 | Cached interest rate is cleared when the interest rate model is set |  | Interest | `setInterestRateModel` |  |  |
 | GOV-52 | While calculating the interest rate, the cached value will be used if the interest rate model is not set or the call to the interest rate model was not successful |  | Interest | `setInterestRateModel` |  |  |
@@ -88,19 +93,19 @@ Additionally, each property is assigned a mutation status:
 | GOV-54 | Calculated interest rate is logged when the interest rate model or interest fee is set |  | Interest | `setInterestRateModel` |  |  |
 | GOV-55 | The interest fee can be changed |  | Interest | `setInterestFee` |  |  |
 | GOV-56 | Interest fees in the guaranteed range (0.1% to 100%) are always allowed |  | Interest | `setInterestFee` |  |  |
-| GOV-57 | Interest fees outside the guaranteed range must be approved by `protocolConfig` |  | Interest | `setInterestFee` |  |  |
-| GOV-58 | The interest fee cannot be greater than `1e4` |  | Interest | `setInterestFee` |  |  |
+| GOV-57 | Interest fees outside the guaranteed range MUST be approved by `protocolConfig` |  | Interest | `setInterestFee` |  |  |
+| GOV-58 |  |  |  |  |  |  |
 | GOV-59 | The hook target can be changed |  | Config | `setHookConfig` |  |  |
 | GOV-60 | The bitmask indicating hooked operations can be changed |  | Config | `setHookConfig` |  |  |
-| GOV-61 | Non-zero hook target must be a valid hook target address |  | Config | `setHookConfig` |  |  |
+| GOV-61 | Non-zero hook target MUST be a valid hook target address |  | Config | `setHookConfig` |  |  |
 | GOV-62 | The hook target can be zero when the operation is disabled |  | Config | `setHookConfig` |  |  |
-| GOV-63 | The bitmask for hooked operations must be within the valid range |  | Config | `setHookConfig` |  |  |
+| GOV-63 | The bitmask for hooked operations MUST be within the valid range |  | Config | `setHookConfig` |  |  |
 | GOV-64 | The bitmask indicating config flags can be changed |  | Config | `setConfigFlags` |  |  |
-| GOV-65 | The bitmask for config flags must be within the valid range |  | Config | `setConfigFlags` |  |  |
+| GOV-65 | The bitmask for config flags MUST be within the valid range |  | Config | `setConfigFlags` |  |  |
 | GOV-66 | The supply cap can be changed |  | Caps | `setCaps` |  |  |
 | GOV-67 | The borrow cap can be changed |  | Caps | `setCaps` |  |  |
-| GOV-68 | The resolved supply cap must not exceed 2 times the maximum sane amount |  | Caps | `setCaps` |  |  |
-| GOV-69 | The resolved borrow cap must not exceed the maximum sane amount |  | Caps | `setCaps` |  |  |
+| GOV-68 | The resolved supply cap MUST not exceed 2 times the maximum sane amount |  | Caps | `setCaps` |  |  |
+| GOV-69 | The resolved borrow cap MUST not exceed the maximum sane amount |  | Caps | `setCaps` |  |  |
 | GOV-70 | When resolving the cap, the exponent is extracted from the least significant 6 bits and the mantissa from the most significant 10 bits, scaled by 100 |  | Caps | `setCaps` |  |  |
 | GOV-71 | A zero cap amount can be set, indicating no limit |  | Caps | `setCaps` |  |  |
 | GOV-72 | A zero cap always resolves into the maximum `uint256` value |  | Caps | `setCaps` |  |  |
@@ -127,20 +132,20 @@ Additionally, each property is assigned a mutation status:
 | VLT-16 | Total assets are the sum of the vault's cash and the total borrows converted to assets |  | Convert | `totalAssets` |  |  |
 | VLT-17 | Shares maximum amounts during calculations cannot exceed the max sane amount (`uint112` max) |  | Convert | `convertToAssets` |  |  |
 | VLT-18 | Assets maximum amounts during calculations cannot exceed the max sane amount (`uint112` max) |  | Convert | `convertToShares` |  |  |
-| VLT-19 | Accumulated fees must be converted to assets using rounding down |  | Fees | `accumulatedFeesAssets` |  |  |
+| VLT-19 | Accumulated fees MUST be converted to assets using rounding down |  | Fees | `accumulatedFeesAssets` |  |  |
 | VLT-20 | The number of assets required to deposit is always rounded down |  | Deposit | `previewDeposit` |  |  |
-| VLT-21 | Non-zero max deposit assets must not be zero when converted to shares down |  | Deposit | `maxDeposit` |  |  |
+| VLT-21 | Non-zero max deposit assets MUST not be zero when converted to shares down |  | Deposit | `maxDeposit` |  |  |
 | VLT-22 | User's max deposit could be zero even if the operation is enabled |  | Deposit | `maxDeposit` |  |  |
 | VLT-23 | Max deposit and max mint are zero when the supply cap is reached |  | Deposit | `maxDeposit`, `maxMint` |  |  |
-| VLT-24 | Max deposit must not exceed the supply cap |  | Deposit | `maxDeposit`, `deposit`, `checkVaultStatus` |  |  |
-| VLT-25 | Non-zero max deposit assets must correspond to a non-zero shares amount |  | Deposit | `maxDeposit` |  |  |
-| VLT-26 | Cash amount must not be greater max sane amount (`uint112` max) |  | Deposit | Cash amount |  |  |
-| VLT-27 | Max deposit assets must not be greater than the max sane amount (`uint112` max) minus cash amount |  | Deposit | `maxDeposit` |  |  |
-| VLT-28 | Total shares amount must not be greater max sane amount (`uint112` max) |  | Deposit | Total shares amount |  |  |
-| VLT-29 | Max mint shares must not be greater than the max sane amount (`uint112` max amount) minus total shares amount |  | Deposit | `maxMint` |  |  |
+| VLT-24 | Max deposit MUST not exceed the supply cap |  | Deposit | `maxDeposit`, `deposit`, `checkVaultStatus` |  |  |
+| VLT-25 | Non-zero max deposit assets MUST correspond to a non-zero shares amount |  | Deposit | `maxDeposit` |  |  |
+| VLT-26 | Cash amount MUST not be greater max sane amount (`uint112` max) |  | Deposit | Cash amount |  |  |
+| VLT-27 | Max deposit assets MUST not be greater than the max sane amount (`uint112` max) minus cash amount |  | Deposit | `maxDeposit` |  |  |
+| VLT-28 | Total shares amount MUST not be greater max sane amount (`uint112` max) |  | Deposit | Total shares amount |  |  |
+| VLT-29 | Max mint shares MUST not be greater than the max sane amount (`uint112` max amount) minus total shares amount |  | Deposit | `maxMint` |  |  |
 | VLT-30 | Preview mint should return the amount of assets that will be required in mint |  | Deposit | `previewMint`, `mint` |  |  |
-| VLT-31 | Share must not be minted or previewed more than max sane amount (`uint112` max) |  | Deposit | `previewMint`, `mint` |  |  |
-| VLT-32 | While minting or previewing mint, shares must be converted to assets using rounding up (all impact of rounding happens in favor of the remaining depositors) |  | Deposit | `previewMint`, `mint` |  |  |
+| VLT-31 | Share MUST not be minted or previewed more than max sane amount (`uint112` max) |  | Deposit | `previewMint`, `mint` |  |  |
+| VLT-32 | While minting or previewing mint, shares MUST be converted to assets using rounding up (all impact of rounding happens in favor of the remaining depositors) |  | Deposit | `previewMint`, `mint` |  |  |
 | VLT-33 | Zero assets deposit do nothing and return zero |  | Deposit | `deposit` |  |  |
 | VLT-34 | Max `uint256` assets deposit mints using all user's balance assets |  | Deposit | `deposit` |  |  |
 | VLT-35 | Zero shares cannot be minted from non-zero assets |  | Deposit | `deposit` |  |  |
@@ -167,12 +172,12 @@ Additionally, each property is assigned a mutation status:
 | VLT-56 | Skimmed assets increase the vault's cash balance |  | Deposit | `skim` |  |  |
 | VLT-57 | The quantity of assets that can be redeemed for a given number of shares is always rounded down |  | Withdraw | `previewRedeem` |  |  |
 | VLT-58 | The number of shares required to withdraw a given quantity of assets is rounded up |  | Withdraw | `previewWithdraw` |  |  |
-| VLT-59 | Max withdraw assets and max redeem shares must be zero when the user balance is zero |  | Withdraw | `maxWithdraw`, `maxRedeem` |  |  |
-| VLT-60 | When an account has a controller enabled (ie, has an active borrow), calling `maxWithdraw` and `maxRedeem` on the account's collateral vaults must return `0` |  | Withdraw | `maxWithdraw`, `maxRedeem` |  |  |
-| VLT-61 | Max redeem shares amount must not be greater than the user's available balance |  | Withdraw | `maxRedeem` |  |  |
-| VLT-62 | Max redeem shares amount must not be greater than the vault's available cash amount, rounded down |  | Withdraw | `maxRedeem` |  |  |
-| VLT-63 | Non-zero max redeem shares amount must correspond to a non-zero assets amount, rounded down |  | Withdraw | `maxRedeem` |  |  |
-| VLT-64 | Max withdraw assets must correspond to max redeem shares, converted to assets and rounded down |  | Withdraw | `maxWithdraw`, `maxRedeem` |  |  |
+| VLT-59 | Max withdraw assets and max redeem shares MUST be zero when the user balance is zero |  | Withdraw | `maxWithdraw`, `maxRedeem` |  |  |
+| VLT-60 | When an account has a controller enabled (ie, has an active borrow), calling `maxWithdraw` and `maxRedeem` on the account's collateral vaults MUST return `0` |  | Withdraw | `maxWithdraw`, `maxRedeem` |  |  |
+| VLT-61 | Max redeem shares amount MUST not be greater than the user's available balance |  | Withdraw | `maxRedeem` |  |  |
+| VLT-62 | Max redeem shares amount MUST not be greater than the vault's available cash amount, rounded down |  | Withdraw | `maxRedeem` |  |  |
+| VLT-63 | Non-zero max redeem shares amount MUST correspond to a non-zero assets amount, rounded down |  | Withdraw | `maxRedeem` |  |  |
+| VLT-64 | Max withdraw assets MUST correspond to max redeem shares, converted to assets and rounded down |  | Withdraw | `maxWithdraw`, `maxRedeem` |  |  |
 | VLT-65 | Zero withdraw amount do nothing and return zero |  | Withdraw | `withdraw` |  |  |
 | VLT-66 | Withdraw asset amounts are converted to shares, rounding up |  | Withdraw | `withdraw` |  |  |
 | VLT-67 | Withdraw and redeem are reverted if the vault's cash is insufficient |  | Withdraw | `withdraw`, `redeem` |  |  |
@@ -230,7 +235,7 @@ Additionally, each property is assigned a mutation status:
 | BRW-32 | Borrowing events are logged with the account, borrowed assets, previous debt, and current debt |  | Borrow | `borrow`, `logBorrow` |  |  |
 | BRW-33 | The amount of assets borrowed is returned to the user |  | Borrow | `borrow` |  |  |
 | BRW-34 | Vault's total borrows are always greater than or equal to user's borrow |  | Borrow | User's borrow |  |  |
-| BRW-35 | When a user's debt changes, the vault's total borrows must also change |  | Borrow | User's debt |  |  |
+| BRW-35 | When a user's debt changes, the vault's total borrows MUST also change |  | Borrow | User's debt |  |  |
 | BRW-36 | Borrowed assets are transferred to the receiver after increasing the user's debt |  | Borrow | `borrow` |  |  |
 | BRW-37 | Max `uint256` max assets to repay means using the total user's debt |  | Repay | `repay` |  |  |
 | BRW-38 | While repaying, the total user's debt is calculated by multiplying the vault's interest accumulator and dividing by the user's interest accumulator, converted to assets, rounded up |  | Repay | `repay` |  |  |
@@ -239,7 +244,7 @@ Additionally, each property is assigned a mutation status:
 | BRW-41 | While repaying, assets are transferred from user's account to vault's account |  | Repay | `repay` |  |  |
 | BRW-42 | While repaying, the actual user's debt is calculated by multiplying the vault's interest accumulator and dividing by the user's interest accumulator |  | Repay | `repay` |  |  |
 | BRW-43 | While repaying, the total user's debt in assets is rounded up |  | Repay | `repay` |  |  |
-| BRW-44 | The repayment amount must not exceed the user's total owed debt, rounded up |  | Repay | `repay` |  |  |
+| BRW-44 | The repayment amount MUST not exceed the user's total owed debt, rounded up |  | Repay | `repay` |  |  |
 | BRW-45 | While repaying, the user's debt is updated to reflect the new amount after repayment |  | Repay | `repay` |  |  |
 | BRW-46 | While repaying, the user's interest accumulator is updated to match the vault's interest accumulator |  | Repay | `repay` |  |  |
 | BRW-47 | While repaying, cache and storage total borrows in the vault are decreased by the repaid amount |  | Repay | `repay` |  |  |
@@ -251,7 +256,7 @@ Additionally, each property is assigned a mutation status:
 | BRW-53 | While repaying with all available shares, assets are calculated rounded down, in favor of the vault |  | RepayWithShares | `repayWithShares` |  |  |
 | BRW-54 | While repaying with shares, required assets are calculated rounded up, in favor of the vault |  | RepayWithShares | `repayWithShares` |  |  |
 | BRW-55 | Zero assets repaying with shares does nothing and returns zero |  | RepayWithShares | `repayWithShares` |  |  |
-| BRW-56 | The repayment amount must not exceed the user's total owed debt, required shares are rounded up |  | RepayWithShares | `repayWithShares` |  |  |
+| BRW-56 | The repayment amount MUST not exceed the user's total owed debt, required shares are rounded up |  | RepayWithShares | `repayWithShares` |  |  |
 | BRW-57 | The user's balance and vault's total shares are decreased when shares are repaid |  | RepayWithShares | `repayWithShares` |  |  |
 | BRW-58 | The user's debt is decreased when assets are repaid with shares |  | RepayWithShares | `repayWithShares` |  |  |
 | BRW-59 | Repaying with shares function returns the number of shares burned and the amount of debt repaid in assets |  | RepayWithShares | `repayWithShares` |  |  |
@@ -269,5 +274,5 @@ Additionally, each property is assigned a mutation status:
 | BRW-71 | The flash loan operation calls a hook if configured, passing the operation code and account |  | FlashLoan | `flashLoan` |  |  |
 | BRW-72 | The original balance of the vault's assets is recorded before the flash loan operation |  | FlashLoan | `flashLoan` |  |  |
 | BRW-73 | The requested amount of assets is transferred to the account initiating the flash loan |  | FlashLoan | `flashLoan` |  |  |
-| BRW-74 | During a flash loan, the borrower's contract must implement the `onFlashLoan` callback to execute logic with the borrowed assets |  | FlashLoan | `flashLoan` |  |  |
-| BRW-75 | Flash loan must be repaid in full before the callback returns, or the transaction reverts |  | FlashLoan | `flashLoan` |  |  |
+| BRW-74 | During a flash loan, the borrower's contract MUST implement the `onFlashLoan` callback to execute logic with the borrowed assets |  | FlashLoan | `flashLoan` |  |  |
+| BRW-75 | Flash loan MUST be repaid in full before the callback returns, or the transaction reverts |  | FlashLoan | `flashLoan` |  |  |
