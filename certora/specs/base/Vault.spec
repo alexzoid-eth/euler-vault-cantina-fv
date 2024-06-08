@@ -1,4 +1,4 @@
-import "../methods/VaultMethods.spec";
+import "./methods/VaultMethods.spec";
 import "./Base.spec";
 
 definition HARNESS_METHODS(method f) returns bool = VAULT_HARNESS_METHODS(f);

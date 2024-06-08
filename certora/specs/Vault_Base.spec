@@ -55,7 +55,7 @@ use rule stateChangeFunctionsReentrancyProtected;
 // VLT-06 | Functions are not able to receive native tokens
 use rule notAbleReceiveNativeTokens;
 
-// VLT-07 | Anyone can execute view functions
+// @todo VLT-07 | Anyone can execute view functions
 use rule anyoneCanExecuteViewFunctions;
 
 // VLT-08 | Specific view functions are protected against reentrancy, while others are not

@@ -1,7 +1,10 @@
 import "./base/Vault.spec";
 
-// VLT-83 | User's balance of assets MUST NOT increase after performing both input and output transactions within a single block
-rule userBalanceNotIncreaseAfterInputOutputInSingleBlock(env e, method f1, method f2, uint256 amountIn, uint256 amountOut, address user) 
+// VLT-83 | User's balance of assets MUST NOT increase after performing both input and 
+//  output transactions within a single block
+rule userBalanceNotIncreaseAfterInputOutputInSingleBlock(
+        env e, method f1, method f2, uint256 amountIn, uint256 amountOut, address user
+        ) 
     filtered { f1 -> INPUT_METHODS(f1), f2 -> OUTPUT_METHODS(f2) } {
 
     // Don't use permit's transferFrom (access to permit2 immutable variable directly)

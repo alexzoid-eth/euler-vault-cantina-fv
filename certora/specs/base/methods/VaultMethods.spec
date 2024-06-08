@@ -1,3 +1,5 @@
+import "./BaseMethods.spec";
+
 methods {
 
     // VaultHarness

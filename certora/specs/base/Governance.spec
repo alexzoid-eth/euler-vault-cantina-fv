@@ -1,4 +1,4 @@
-import "../methods/GovernorMethods.spec";
+import "./methods/GovernorMethods.spec";
 import "./Base.spec";
 
 definition HARNESS_METHODS(method f) returns bool = 

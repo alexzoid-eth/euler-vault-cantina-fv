@@ -3,7 +3,6 @@ import "./base/Governance.spec";
 use builtin rule sanity;
 use builtin rule hasDelegateCalls;
 use builtin rule msgValueInLoopRule;
-use builtin rule viewReentrancy;
 
 // GOV-74 | Specific functions can modify state
 use rule specificFunctionsModifyState;

@@ -19,7 +19,7 @@ function updateVaultFeeConfigCVL(address vault) {
 function requireValidTimeStamp(env eInv, env eFunc) {
     require(eInv.block.timestamp == eFunc.block.timestamp);
     require(eFunc.block.timestamp > 0);
-    // There is a safe accumption `uint48(block.timestamp + rampDuration);` here, limit timestamp to 3000 year
+    // There is a safe accumption limit timestamp to 3000 year
     require(require_uint48(eFunc.block.timestamp) < TIMESTAMP_3000_YEAR());
 }
 
@@ -45,7 +45,8 @@ rule protocolFeeConfigCalled(env e) {
     satisfy(ghostProtocolFeeConfigCalled);
 }
 
-// @todo GOV-75 | Update the protocol (Euler DAO's) receiver and fee amount for the current contract MUST affect the state
+// @todo GOV-75 | Update the protocol (Euler DAO's) receiver and fee amount for the current 
+//  contract MUST affect the state
 rule protocolFeeParamsAffectState(env e) {
 
     // Disable hook and balance forwarder
@@ -76,7 +77,8 @@ rule protocolFeeParamsAffectState(env e) {
     assert(after1[currentContract] != after2[currentContract]);
 }
 
-// GOV-76 | Update the protocol (Euler DAO's) receiver and fee amount for another contract MUST NOT affect the state
+// GOV-76 | Update the protocol (Euler DAO's) receiver and fee amount for another 
+//  contract MUST NOT affect the state
 rule protocolFeeParamsOfAnotherVaultNotAffectState(env e) {
 
     storage init = lastStorage;
@@ -322,14 +324,17 @@ invariant LTVTimestampValid(env e, address collateral) ghostLtvTargetTimestamp[c
 // GOV-40 | LTV's timestamp MUST be in the future only when ramping set
 invariant LTVTimestampFutureRamping(env e, address collateral)
     ghostLtvTargetTimestamp[collateral] > require_uint48(e.block.timestamp) 
-        => ghostLtvRampDuration[collateral] >= ghostLtvTargetTimestamp[collateral] - require_uint48(e.block.timestamp) 
+        => (ghostLtvRampDuration[collateral] 
+                >= ghostLtvTargetTimestamp[collateral] - require_uint48(e.block.timestamp)
+                ) 
     filtered { f -> !HARNESS_METHODS(f) } {
         preserved with (env eFunc) {
             requireValidTimeStamp(e, eFunc);
         } 
     }
     
-// @todo GOV-41 | Initial liquidation LTV is always the previous liquidation LTV or greater than liquidation LTV when ramping
+// @todo GOV-41 | Initial liquidation LTV is always the previous liquidation LTV or greater 
+//  than liquidation LTV when ramping
 invariant initialLiquidationLTVSolvency(env e, address collateral) 
     ghostInitialLiquidationLTV[collateral] == ghostLiquidationLTVPrev[collateral]
         || ghostInitialLiquidationLTV[collateral] >= ghostLiquidationLTV[collateral]
@@ -379,10 +384,13 @@ invariant initializedLTVInCollateralList(address collateral)
         }
     }
 
-// @todo GOV-45 | When ramping is in progress, the time remaining is always less than or equal to the ramp duration
+// @todo GOV-45 | When ramping is in progress, the time remaining is always less than or equal to 
+//  the ramp duration
 invariant LTVRampingTimeWithinBounds(env e, address collateral) 
     require_uint48(e.block.timestamp) < ghostLtvTargetTimestamp[collateral]
-        => ghostLtvTargetTimestamp[collateral] - require_uint48(e.block.timestamp) < ghostLtvRampDuration[collateral]
+        => (ghostLtvTargetTimestamp[collateral] - require_uint48(e.block.timestamp) 
+            < ghostLtvRampDuration[collateral]
+            )
     filtered { f -> !HARNESS_METHODS(f) } {
         preserved with (env eFunc) {
             requireValidTimeStamp(e, eFunc);
