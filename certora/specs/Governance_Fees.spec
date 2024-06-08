@@ -1,170 +1,6 @@
-import "methods/governor_methods.spec";
+import "./base/Governance.spec";
 
-methods {
-    function _.protocolFeeConfig(address vault) external => protocolFeeConfigCVL(vault) expect (address, uint16) ALL;
-
-    // EVC functions summarize (required the same results when comparing a storage)
-    function _.requireVaultStatusCheck() external => CONSTANT;
-    function _.getCurrentOnBehalfOfAccount(address controllerToCheck) external => CONSTANT;
-    function _.balanceTrackerHook(address account, uint256 newAccountBalance, bool forfeitRecentReward) external => CONSTANT;
-
-    function _.logVaultStatus(GovernanceHarness.VaultCache memory a, uint256 interestRate) internal 
-        => logVaultStatusCVL(interestRate) expect void;
-}
-
-definition HARNESS_METHODS(method f) returns bool = GOVERNANCE_HARNESS_METHODS(f);
-
-definition CONFIG_SCALE() returns mathint = 10^4;
 definition TIMESTAMP_3000_YEAR() returns uint48 = 32499081600;
-
-///////////////// GHOSTS & HOOKS //////////////////
-
-persistent ghost mapping(address => address) ghostProtocolFeeReceiver;
-persistent ghost mapping(address => uint16) ghostProtocolFeeShare;
-persistent ghost bool ghostProtocolFeeConfigCalled;
-persistent ghost address ghostProtocolFeeRequestedVault {
-    init_state axiom ghostProtocolFeeRequestedVault == currentContract;
-}
-
-//
-// ltvLookup[].interestRate
-//
-
-persistent ghost mathint ghostInterestRate {
-    init_state axiom ghostInterestRate == 0;
-}
-
-hook Sload uint72 val currentContract.vaultStorage.interestRate {
-    require(require_uint72(ghostInterestRate) == val);
-} 
-
-hook Sstore currentContract.vaultStorage.interestRate uint72 val {
-    ghostInterestRate = val;
-}
-
-//
-// vaultStorage.ltvList
-//
-
-persistent ghost mapping (mathint => address) ghostLTVList {
-    init_state axiom forall mathint i. forall mathint j. ghostLTVList[i] != ghostLTVList[j];
-}
-
-hook Sload address val currentContract.vaultStorage.ltvList[INDEX uint256 i] {
-    require(ghostLTVList[i] == val);
-} 
-
-hook Sstore currentContract.vaultStorage.ltvList[INDEX uint256 i] address val {
-    ghostLTVList[i] = val;
-}
-
-//
-// ltvLookup[].borrowLTV
-//
-
-persistent ghost mapping (address => mathint) ghostBorrowLTV {
-    init_state axiom forall address i. ghostBorrowLTV[i] == 0;
-}
-
-hook Sload GovernanceHarness.ConfigAmount val currentContract.vaultStorage.ltvLookup[KEY address i].borrowLTV {
-    require(require_uint16(ghostBorrowLTV[i]) == val);
-} 
-
-hook Sstore currentContract.vaultStorage.ltvLookup[KEY address i].borrowLTV GovernanceHarness.ConfigAmount val {
-    ghostBorrowLTV[i] = val;
-}
-
-//
-// ltvLookup[].liquidationLTV
-//
-
-persistent ghost mapping (address => mathint) ghostLiquidationLTV {
-    init_state axiom forall address i. ghostLiquidationLTV[i] == 0;
-}
-
-persistent ghost mapping (address => mathint) ghostLiquidationLTVPrev {
-    init_state axiom forall address i. ghostLiquidationLTVPrev[i] == 0;
-}
-
-hook Sload GovernanceHarness.ConfigAmount val currentContract.vaultStorage.ltvLookup[KEY address i].liquidationLTV {
-    require(require_uint16(ghostLiquidationLTV[i]) == val);
-} 
-
-hook Sstore currentContract.vaultStorage.ltvLookup[KEY address i].liquidationLTV GovernanceHarness.ConfigAmount val {
-    ghostLiquidationLTVPrev[i] = ghostLiquidationLTV[i];
-    ghostLiquidationLTV[i] = val;
-}
-
-//
-// ltvLookup[].initialLiquidationLTV
-//
-
-persistent ghost mapping (address => mathint) ghostInitialLiquidationLTV {
-    init_state axiom forall address i. ghostInitialLiquidationLTV[i] == 0;
-}
-
-hook Sload GovernanceHarness.ConfigAmount val currentContract.vaultStorage.ltvLookup[KEY address i].initialLiquidationLTV {
-    require(require_uint16(ghostInitialLiquidationLTV[i]) == val);
-} 
-
-hook Sstore currentContract.vaultStorage.ltvLookup[KEY address i].initialLiquidationLTV GovernanceHarness.ConfigAmount val {
-    ghostInitialLiquidationLTV[i] = val;
-}
-
-//
-// ltvLookup[].targetTimestamp
-//
-
-persistent ghost mapping (address => uint48) ghostLtvTargetTimestamp {
-    init_state axiom forall address i. ghostLtvTargetTimestamp[i] == 0;
-}
-
-hook Sload uint48 val currentContract.vaultStorage.ltvLookup[KEY address i].targetTimestamp {
-    require(ghostLtvTargetTimestamp[i] == val);
-} 
-
-hook Sstore currentContract.vaultStorage.ltvLookup[KEY address i].targetTimestamp uint48 val {
-    ghostLtvTargetTimestamp[i] = val;
-}
-
-//
-// ltvLookup[].rampDuration
-//
-
-persistent ghost mapping (address => mathint) ghostLtvRampDuration {
-    init_state axiom forall address i. ghostLtvRampDuration[i] == 0;
-}
-
-persistent ghost mapping (address => mathint) ghostLtvRampDurationPrev {
-    init_state axiom forall address i. ghostLtvRampDurationPrev[i] == 0;
-}
-
-hook Sload uint32 val currentContract.vaultStorage.ltvLookup[KEY address i].rampDuration {
-    require(require_uint32(ghostLtvRampDuration[i]) == val);
-} 
-
-hook Sstore currentContract.vaultStorage.ltvLookup[KEY address i].rampDuration uint32 val {
-    ghostLtvRampDurationPrev[i] = ghostLtvRampDuration[i];
-    ghostLtvRampDuration[i] = val;
-}
-
-//
-// ltvLookup[].initialized
-//
-
-persistent ghost mapping (address => bool) ghostLtvInitialized {
-    init_state axiom forall address i. ghostLtvInitialized[i] == false;
-}
-
-hook Sload bool val currentContract.vaultStorage.ltvLookup[KEY address i].initialized {
-    require(ghostLtvInitialized[i] == val);
-} 
-
-hook Sstore currentContract.vaultStorage.ltvLookup[KEY address i].initialized bool val {
-    ghostLtvInitialized[i] = val;
-}
-
-////////////////// FUNCTIONS //////////////////////
 
 function updateVaultFeeConfigCVL(address vault) {
 
@@ -180,25 +16,12 @@ function updateVaultFeeConfigCVL(address vault) {
     ghostProtocolFeeShare[vault] = newProtocolFeeShare;
 }
 
-function protocolFeeConfigCVL(address vault) returns (address, uint16) {
-    ghostProtocolFeeConfigCalled = true;
-    ghostProtocolFeeRequestedVault = vault;
-    return (ghostProtocolFeeReceiver[vault], ghostProtocolFeeShare[vault]);
-}
-
 function requireValidTimeStamp(env eInv, env eFunc) {
     require(eInv.block.timestamp == eFunc.block.timestamp);
     require(eFunc.block.timestamp > 0);
     // There is a safe accumption `uint48(block.timestamp + rampDuration);` here, limit timestamp to 3000 year
     require(require_uint48(eFunc.block.timestamp) < TIMESTAMP_3000_YEAR());
 }
-
-persistent ghost mathint ghostLogVaultInterestRate;
-function logVaultStatusCVL(uint256 interestRate) {
-    ghostLogVaultInterestRate = interestRate;
-}
-
-///////////////// PROPERTIES //////////////////////
 
 // GOV-22 | The fee receiver address can be changed
 rule feeReceiverCanBeTransferred(env e, address newFeeReceiver) {

@@ -1,18 +1,9 @@
-import "methods/vault_methods.spec";
-import "base/base.spec";
-import "base/vault.spec";
+import "./base/Vault.spec";
 
-methods {
-    // EVC
-    function _.getControllers(address account) external => NONDET;
-    function _.hasAnyControllerEnabled(address account) external => NONDET;
-    function _.requireVaultStatusCheck() external 
-        => requireVaultStatusCheckCVL() expect void;
-    function _.requireAccountAndVaultStatusCheck(address caller) external 
-        => requireVaultAccountStatusCheckCVL(caller) expect void;
-    function _.getCurrentOnBehalfOfAccount(address) external 
-        => getCurrentOnBehalfOfAccountCVL() expect (address, bool) ALL;
-}
+use builtin rule sanity;
+use builtin rule hasDelegateCalls;
+use builtin rule msgValueInLoopRule;
+use builtin rule viewReentrancy;
 
 // VLT-01 | Specific functions require a vault status check
 rule specificFunctionsRequireVaultStatusCheck(env e, method f, calldataarg args)

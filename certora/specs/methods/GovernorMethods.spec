@@ -1,5 +1,3 @@
-import "base_methods.spec";
-
 methods {
 
     // GovernanceHarness

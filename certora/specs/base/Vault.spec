@@ -1,8 +1,5 @@
-using DummyERC20A as _Asset;
-
-methods {
-    function _.metadata() internal => metadataCVL() expect (address, address, address) ALL;
-}
+import "../methods/VaultMethods.spec";
+import "./Base.spec";
 
 definition HARNESS_METHODS(method f) returns bool = VAULT_HARNESS_METHODS(f);
 
@@ -67,15 +64,3 @@ definition INPUT_METHODS(method f) returns bool =
 definition OUTPUT_METHODS(method f) returns bool = 
     f.selector == sig:withdraw(uint256,address,address).selector
     || f.selector == sig:redeem(uint256,address,address).selector;
-
-function metadataCVL() returns (address, address, address) {
-    address asset;
-    address oracle;
-    address unitOfAccount;
-
-    require(asset == _Asset);
-    require(asset != oracle);
-    require(oracle != unitOfAccount);
-
-    return (asset, oracle, unitOfAccount);
-}

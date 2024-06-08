@@ -1,4 +1,5 @@
 methods {
+    
     // AbstractBaseHarness
     function vaultCacheOracleConfigured() external returns (bool);
     function isAccountStatusCheckDeferredExt(address) external returns (bool);

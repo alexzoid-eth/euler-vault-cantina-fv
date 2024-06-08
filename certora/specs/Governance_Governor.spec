@@ -1,27 +1,4 @@
-import "methods/governor_methods.spec";
-
-methods {
-    // EVC functions summarize (required the same results in governorOnly() modifier)
-    function _.getCurrentOnBehalfOfAccount(address controllerToCheck) external => PER_CALLEE_CONSTANT;
-    function _.getAccountOwner(address account) external => PER_CALLEE_CONSTANT;
-    function _.isOperatorAuthenticated() external => PER_CALLEE_CONSTANT;
-    function _.isControlCollateralInProgress() external => PER_CALLEE_CONSTANT;
-}
-
-definition HARNESS_METHODS(method f) returns bool = GOVERNANCE_HARNESS_METHODS(f);
-
-definition GOVERNOR_ONLY_METHODS(method f) returns bool = 
-    f.selector == sig:setGovernorAdmin(address).selector
-    || f.selector == sig:setFeeReceiver(address).selector
-    || f.selector == sig:setLTV(address,uint16,uint16,uint32).selector
-    || f.selector == sig:clearLTV(address).selector
-    || f.selector == sig:setMaxLiquidationDiscount(uint16).selector
-    || f.selector == sig:setLiquidationCoolOffTime(uint16).selector
-    || f.selector == sig:setInterestRateModel(address).selector
-    || f.selector == sig:setHookConfig(address,uint32).selector
-    || f.selector == sig:setConfigFlags(uint32).selector
-    || f.selector == sig:setCaps(uint16,uint16).selector
-    || f.selector == sig:setInterestFee(uint16).selector;    
+import "./base/Governance.spec";
 
 // GOV-01 | Only the governor can invoke methods that modify the configuration of the vault
 rule governorOnlyMethods(env e, method f, calldataarg args) 

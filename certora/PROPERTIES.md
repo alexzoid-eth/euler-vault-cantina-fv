@@ -26,13 +26,10 @@ Additionally, each property is assigned a mutation status:
 - ❎ Mutation Caught
 - ❗ Mutation Skipped
 
-## Governance
+## Governance_Base
 
 | Property | Description | Category | Tag | Entries | Mutation | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| GOV-01 | Only the governor can invoke methods that modify the configuration of the vault |  | Governor | `governorOnly` | [Governance_Governor/1.sol](mutations/Governance_Governor/1.sol) | ✅❎ |
-| GOV-73 | Non-governor methods MUST be accessible to any callers |  | Governor | `governorOnly` | [Governance_Governor/2.sol](mutations/Governance_Governor/2.sol) | ✅❎ |
-| GOV-02 | Only one governor can exist at one time |  | Governor |  | [Governance_Governor/3.sol](mutations/Governance_Governor/3.sol) | ✅❎ |
 | GOV-03 | When the sender is `EVC`, the governor's address is extracted from the operation's current account on behalf |  | EVCClient | `governorOnly` |  |  |
 | GOV-04 | Governor's functions cannot be executed from `EVC` when the authenticated account is a governor's sub-account |  | EVCClient | `governorOnly` |  |  |
 | GOV-05 | Governor's functions cannot be executed from `EVC` when an operator is authenticated |  | EVCClient | `governorOnly` |  |  |
@@ -52,8 +49,21 @@ Additionally, each property is assigned a mutation status:
 | GOV-17 | View functions MUST NOT be protected against reentrancy |  | Base | View functions | [Governance_Base/6.sol](mutations/Governance_Base/6.sol) | ✅❎ |
 | GOV-18 | Ensure view functions integrity |  | Base | View functions |  |  |
 | GOV-19 | View functions don't update state |  | Base | View functions |  | ✅ |
+
+## Governance_Governor
+
+| Property | Description | Category | Tag | Entries | Mutation | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| GOV-01 | Only the governor can invoke methods that modify the configuration of the vault |  | Governor | `governorOnly` | [Governance_Governor/1.sol](mutations/Governance_Governor/1.sol) | ✅❎ |
+| GOV-73 | Non-governor methods MUST be accessible to any callers |  | Governor | `governorOnly` | [Governance_Governor/2.sol](mutations/Governance_Governor/2.sol) | ✅❎ |
+| GOV-02 | Only one governor can exist at one time |  | Governor |  | [Governance_Governor/3.sol](mutations/Governance_Governor/3.sol) | ✅❎ |
 | GOV-20 | Governor's ownership can be transferred |  | Governor | `setGovernorAdmin` | | ✅ |
 | GOV-21 | The ownership could be revoked by setting the governor to zero address |  | Governor | `setGovernorAdmin` | | ✅❎ |
+
+## Governance_Fees
+
+| Property | Description | Category | Tag | Entries | Mutation | Status |
+| --- | --- | --- | --- | --- | --- | --- |
 | GOV-22 | The fee receiver address can be changed |  | Fees | `setFeeReceiver` |  | ✅ |
 | GOV-23 | While distributing fees, external protocol config contract is used |  | Fees | `convertFees` | [Governance_Fees/1.sol](mutations/Governance_Fees/1.sol) | ✅❎ |
 | GOV-75 | Update the protocol (Euler DAO's) receiver and fee amount for the current contract MUST affect the state |  | Fees | `convertFees` | [Governance_Fees/2.sol](mutations/Governance_Fees/2.sol) | ❌|
@@ -67,6 +77,11 @@ Additionally, each property is assigned a mutation status:
 | GOV-28 | Fee shares cannot be transferred to the zero address |  | Fees | `convertFees` |  | ✅ |
 | GOV-29 | Accumulated fees only increase when some time has passed |  | Fees | `convertFees` |  | ✅ |
 | GOV-30 | Fees are retrieved only for the contract itself from the protocol config contract |  | Fees | `convertFees` |  | ✅ |
+
+## Governance_Other
+
+| Property | Description | Category | Tag | Entries | Mutation | Status |
+| --- | --- | --- | --- | --- | --- | --- |
 | GOV-31 | The specified LTV is a fraction between 0 and 1 (scaled by 10,000) |  | Liquidation | `SetLTV` |  | ❌ |
 | GOV-32 | Self-collateralization is not allowed |  | Liquidation | `SetLTV` |  | ✅ |
 | GOV-33 | The borrow LTV MUST be lower than or equal to the liquidation LTV |  | Liquidation | `SetLTV` |  | ✅ |
@@ -110,7 +125,7 @@ Additionally, each property is assigned a mutation status:
 | GOV-71 | A zero cap amount can be set, indicating no limit |  | Caps | `setCaps` |  |  |
 | GOV-72 | A zero cap always resolves into the maximum `uint256` value |  | Caps | `setCaps` |  |  |
 
-## Vault
+## Vault_Base
 
 | Property | Description | Category | Tag | Entries | Mutation | Status |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -127,6 +142,17 @@ Additionally, each property is assigned a mutation status:
 | VLT-12 | Some view functions can be disabled by the governor and MUST return zero |  | Base | `maxMint`, `maxWithdraw` |  |  |
 | VLT-13 | Functions are considered disabled if a hook has been installed for it and the hook target is zero address |  | Base |  |  |  |
 | VLT-14 | Hooks are not executed for disabled functions |  | Base | Disabled functions |  |  |
+
+## Vault_1
+
+| Property | Description | Category | Tag | Entries | Mutation | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| VLT-83 | User's balance MUST NOT increase after performing both input and output transactions within a single block |  | 1 | `deposit`, `mint`, `withdraw`, `redeem` |  |  |
+
+## Vault_Other
+
+| Property | Description | Category | Tag | Entries | Mutation | Status |
+| --- | --- | --- | --- | --- | --- | --- |
 | VLT-11 | Each vault holds exactly one creator |  | Convert | View functions |  |  |
 | VLT-15 | Each vault holds exactly one underlying asset |  | Convert | `asset` |  |  |
 | VLT-16 | Total assets are the sum of the vault's cash and the total borrows converted to assets |  |  | `totalAssets` |  |  |
@@ -196,7 +222,6 @@ Additionally, each property is assigned a mutation status:
 | VLT-80 | Withdraw and redeem decrease the vault's cash amount |  | Withdraw | `withdraw`, `redeem` |  |  |
 | VLT-81 | Assets cannot be withdrawn to the zero address |  | Withdraw | `withdraw`, `redeem` |  |  |
 | VLT-82 | Assets cannot be withdrawn or redeemed to sub-accounts when asset itself is NOT compatible with EVC |  | Withdraw | `withdraw`, `redeem` |  |  |
-| VLT-83 | User's balance MUST NOT increase after performing both input and output transactions within a single block |  | 1 | `deposit`, `mint`, `withdraw`, `redeem` |  |  |
 
 
 ## Borrowing
