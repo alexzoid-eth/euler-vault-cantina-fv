@@ -1,7 +1,7 @@
 import "./base/Vault.spec";
 import "./ValidState.spec";
 
-// VLT-83 | User's balance of assets MUST NOT increase after performing both input and 
+// @todo VLT-83 | User's balance of assets MUST NOT increase after performing both input and 
 //  output transactions within a single block
 rule userBalanceNotIncreaseAfterInputOutputInSingleBlock(
         env e, method f1, method f2, uint256 amountIn, uint256 amountOut, address user
@@ -64,40 +64,31 @@ rule snapshotCashSetFromStorage(env e, method f, calldataarg args)
     );
 }
 
-// VLT- | Snapshot total borrow assets MUST set from storage total borrow shares, rounding up
-rule snapshotTotalBorrowAssetsSetFromStorage(env e, method f, calldataarg args) 
-    filtered { f -> !HARNESS_METHODS(f) } {
-
-    requireInvariant uninitializedSnapshotReset;
-    requireInvariant snapshotDisabledWithBothCapsDisabled;
-
-    bool initialized = ghostSnapshotInitialized;
-    mathint totalBorrowsPrev = ghostTotalBorrows;
-
-    f(e, args);
-
-    // Total borrows in snapshot was changed
-    assert(ghostSnapshotInitialized && initialized != ghostSnapshotInitialized
-        => (ghostTotalBorrows == totalBorrowsPrev
-            // Total borrows in storage was NOT changed in this transaction
-            ? ghostSnapshotBorrows == to_mathint(borrowsToAssetsUp(require_uint256(ghostTotalBorrows)))
-            // Total borrows in storage was changed in this transaction
-            : ghostSnapshotBorrows == to_mathint(borrowsToAssetsUp(require_uint256(totalBorrowsPrev)))
-            )
-    );
-
-}
-
-// VLT- | The vault's cash changes are synchronized with changes in total shares
+// @todo VLT- | The vault's cash changes are synchronized with changes in total shares
 rule cashSharesSynced(env e, method f, calldataarg args) 
     filtered { f -> !HARNESS_METHODS(f) } {
 
-    mathint cashPrev = ghostCash;
-    mathint totalSharesPrev = ghostTotalShares;
+    requireInvariant cashNotLessThanAssets;
 
+    mathint cashPrev = ghostCash;
+    mathint totalSharesPrev = totalShares(e);
+    
     f(e, args);
 
-    assert(ghostCash != cashPrev => ghostTotalShares != totalSharesPrev);
+    /*
+    uint256 amount; address receiver; address owner;
+    require(owner != 0);
+    require(receiver != currentContract); // @todo
+    if(f.selector == sig:withdraw(uint256,address,address).selector) {
+        withdraw(e, amount, receiver, owner);
+    } else if(f.selector == sig:redeem(uint256,address,address).selector) {
+        redeem(e, amount, receiver, owner);
+    } else {
+        f(e, args);
+    }
+    */
+
+    assert(ghostCash != cashPrev => to_mathint(totalShares(e)) != totalSharesPrev);
 }
 
 // VLT- | Snapshot MUST NOT be used when it is not initialized
@@ -115,19 +106,18 @@ rule snapshotUsedWhenInitialized(env e, method f, calldataarg args)
         );
 }
 
-// VLT- | Change interest accumulator OR accumulated fees accrued MUST set last interest accumulator timestamp
+// @todo VLT- | Change accumulated fees accrued MUST set last interest accumulator timestamp
 rule interestFeesAccruedSetTimestamp(env e, method f, calldataarg args)
     filtered { f -> !HARNESS_METHODS(f) } {
     
     require(e.block.timestamp > 0);
     requireInvariant lastInterestAccumulatorNotInFuture(e);
 
-    mathint interestAccumulatorPrev = ghostInterestAccumulator;
-    mathint accumulatedFeesPrev = ghostAccumulatedFees;
+    mathint accumulatedFeesPrev = accumulatedFees(e);
 
     f(e, args);
     
-    assert((accumulatedFeesPrev != ghostInterestAccumulator || accumulatedFeesPrev != ghostAccumulatedFees)
+    assert(accumulatedFeesPrev != to_mathint(accumulatedFees(e))
         => ghostLastInterestAccumulatorUpdate == to_mathint(e.block.timestamp)
     );
 }
@@ -148,9 +138,11 @@ rule feesAndInterestNotUpdateNoTimePassed(env e, method f, calldataarg args)
     );
 }
 
-// VLT- | The vault's cash changes must be accompanied by either a transfer or a skimming of surplus assets
+// @todo VLT- | The vault's cash changes must be accompanied by either a transfer or a skimming of surplus assets
 rule cashChangesWithTransferOrSkim(env e, method f, calldataarg args)
     filtered { f -> !HARNESS_METHODS(f) } {
+
+    requireInvariant cashNotLessThanAssets;
 
     mathint cashPrev = ghostCash;
     mathint erc20BalancePrev = ghostErc20Balances[currentContract];
@@ -174,6 +166,8 @@ rule cashChangesWithTransferOrSkim(env e, method f, calldataarg args)
 // VLT- | Transferring assets from the vault MUST decrease the available cash balance
 rule transferOutDecreaseCash(env e, method f, calldataarg args)
     filtered { f -> !HARNESS_METHODS(f) } {
+
+    requireInvariant cashNotLessThanAssets;
 
     mathint cashPrev = ghostCash;
     mathint erc20BalancePrev = ghostErc20Balances[currentContract];

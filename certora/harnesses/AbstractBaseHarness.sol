@@ -133,4 +133,44 @@ abstract contract AbstractBaseHarness is InitializeModule  {
     function ltvListLength() public view returns (uint256) {
         return vaultStorage.ltvList.length;
     }
+
+    // VaultStorage Accessors:
+    function storage_lastInterestAccumulatorUpdate() public view returns (uint48) {
+        return vaultStorage.lastInterestAccumulatorUpdate;
+    }
+    function storage_cash() public view returns (Assets) {
+        return vaultStorage.cash;
+    }
+    function storage_supplyCap() public view returns (uint256) {
+        return vaultStorage.supplyCap.resolve();
+    }
+    function storage_borrowCap() public view returns (uint256) {
+        return vaultStorage.borrowCap.resolve();
+    }
+    // reentrancyLocked seems not direclty used in loadVault
+    function storage_hookedOps() public view returns (Flags) {
+        return vaultStorage.hookedOps;
+    }
+    function storage_snapshotInitialized() public view returns (bool) {
+        return vaultStorage.snapshotInitialized;
+    }
+    function storage_totalShares() public view returns (Shares) {
+        return vaultStorage.totalShares;
+    }
+    function storage_totalBorrows() public view returns (Owed) {
+        return vaultStorage.totalBorrows;
+    }
+    function storage_accumulatedFees() public view returns (Shares) {
+        return vaultStorage.accumulatedFees;
+    }
+    function storage_interestAccumulator() public view returns (uint256) {
+        return vaultStorage.interestAccumulator;
+    }
+    function storage_configFlags() public view returns (Flags) {
+        return vaultStorage.configFlags;
+    }
+
+    function cache_cash() public view returns (Assets) {
+        return loadVault().cash;
+    }
 }

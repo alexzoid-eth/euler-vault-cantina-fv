@@ -2,21 +2,6 @@ import "./BaseMethods.spec";
 
 methods {
 
-    // VaultHarness
-    function userAssets(address) external returns (uint256);
-    function storage_lastInterestAccumulatorUpdate() external returns (uint48) envfree;
-    function storage_cash() external returns (VaultHarness.Assets) envfree;
-    function storage_supplyCap() external returns (uint256) envfree;
-    function storage_borrowCap() external returns (uint256) envfree;
-    function storage_hookedOps() external returns (VaultHarness.Flags) envfree;
-    function storage_snapshotInitialized() external returns (bool) envfree;
-    function storage_totalShares() external returns (VaultHarness.Shares) envfree;
-    function storage_totalBorrows() external returns (VaultHarness.Owed) envfree;
-    function storage_accumulatedFees() external returns (VaultHarness.Shares) envfree;
-    function storage_interestAccumulator() external returns (uint256) envfree;
-    function storage_configFlags() external returns (VaultHarness.Flags) envfree;
-    function cache_cash() external returns (VaultHarness.Assets);
-
     // Token
     function name() external returns (string) envfree;
     function symbol() external returns (string) envfree;
@@ -53,17 +38,4 @@ methods {
 }
 
 definition VAULT_HARNESS_METHODS(method f) returns bool = 
-    BASE_HARNESS_METHODS(f)
-    || f.selector == sig:userAssets(address).selector
-    || f.selector == sig:storage_lastInterestAccumulatorUpdate().selector
-    || f.selector == sig:storage_cash().selector
-    || f.selector == sig:storage_supplyCap().selector
-    || f.selector == sig:storage_borrowCap().selector
-    || f.selector == sig:storage_hookedOps().selector
-    || f.selector == sig:storage_snapshotInitialized().selector
-    || f.selector == sig:storage_totalShares().selector
-    || f.selector == sig:storage_totalBorrows().selector
-    || f.selector == sig:storage_accumulatedFees().selector
-    || f.selector == sig:storage_interestAccumulator().selector
-    || f.selector == sig:storage_configFlags().selector
-    || f.selector == sig:cache_cash().selector;
+    BASE_HARNESS_METHODS(f);

@@ -10,6 +10,25 @@ uint256 constant SHARES_MASK = 0x000000000000000000000000000000000000FFFFFFFFFFF
 contract BorrowingHarness is AbstractBaseHarness, Borrowing {
     constructor(Integrations memory integrations) Borrowing(integrations) {}
 
+    function updateVault() internal override returns (VaultCache memory vaultCache) {
+        // initVaultCache is difficult to summarize because we can't
+        // reason about the pass-by-value VaultCache at the start and
+        // end of the call as separate values. So this harness
+        // gives us a way to keep the loadVault summary when updateVault
+        // is called
+        vaultCache = loadVault();
+        if(block.timestamp - vaultCache.lastInterestAccumulatorUpdate > 0) {
+            vaultStorage.lastInterestAccumulatorUpdate = vaultCache.lastInterestAccumulatorUpdate;
+            vaultStorage.accumulatedFees = vaultCache.accumulatedFees;
+
+            vaultStorage.totalShares = vaultCache.totalShares;
+            vaultStorage.totalBorrows = vaultCache.totalBorrows;
+
+            vaultStorage.interestAccumulator = vaultCache.interestAccumulator;
+        }
+        return vaultCache;
+    }
+
     function initOperationExternal(uint32 operation, address accountToCheck)
         public 
         returns (VaultCache memory vaultCache, address account)

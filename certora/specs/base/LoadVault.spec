@@ -1,13 +1,11 @@
-import "./Base.spec";
-
 // parameter is meant to be block.timestamp
 persistent ghost newInterestBorrows(uint256) returns uint256;
 
-function loadVaultAssumeNoUpdateCVL(env e) returns VaultHarness.VaultCache {
-    VaultHarness.VaultCache vaultCache;
+function loadVaultAssumeNoUpdateCVL(env e) returns BaseHarness.VaultCache {
+    BaseHarness.VaultCache vaultCache;
     uint48 lastUpdate = storage_lastInterestAccumulatorUpdate();
-    VaultHarness.Owed oldTotalBorrows = storage_totalBorrows(); 
-    VaultHarness.Shares oldTotalShares = storage_totalShares();
+    BaseHarness.Owed oldTotalBorrows = storage_totalBorrows(); 
+    BaseHarness.Shares oldTotalShares = storage_totalShares();
     require vaultCache.cash == storage_cash();
     uint48 timestamp48 = require_uint48(e.block.timestamp);
     bool updated = timestamp48 != lastUpdate;
@@ -25,7 +23,6 @@ function loadVaultAssumeNoUpdateCVL(env e) returns VaultHarness.VaultCache {
     require vaultCache.snapshotInitialized == storage_snapshotInitialized();
 
     require vaultCache.asset == _Asset;
-    require vaultCache.asset == asset();
     require vaultCache.oracle == ghostOracleAddress;
     require vaultCache.unitOfAccount == ghostUnitOfAccount;
 
@@ -33,11 +30,11 @@ function loadVaultAssumeNoUpdateCVL(env e) returns VaultHarness.VaultCache {
 }
 
 // WIP summarization, use at your discretion
-function loadVaultCVL(env e) returns VaultHarness.VaultCache {
-    VaultHarness.VaultCache vaultCache;
+function loadVaultCVL(env e) returns BaseHarness.VaultCache {
+    BaseHarness.VaultCache vaultCache;
     uint48 lastUpdate = storage_lastInterestAccumulatorUpdate();
-    VaultHarness.Owed oldTotalBorrows = storage_totalBorrows(); 
-    VaultHarness.Shares oldTotalShares = storage_totalShares();
+    BaseHarness.Owed oldTotalBorrows = storage_totalBorrows(); 
+    BaseHarness.Shares oldTotalShares = storage_totalShares();
     require vaultCache.cash == storage_cash();
     uint48 timestamp48 = require_uint48(e.block.timestamp);
     bool updated = timestamp48 != lastUpdate;
@@ -84,7 +81,6 @@ function loadVaultCVL(env e) returns VaultHarness.VaultCache {
     require vaultCache.snapshotInitialized == storage_snapshotInitialized();
 
     require vaultCache.asset == _Asset;
-    require vaultCache.asset == asset();
     require vaultCache.oracle == ghostOracleAddress;
     require vaultCache.unitOfAccount == ghostUnitOfAccount;
 

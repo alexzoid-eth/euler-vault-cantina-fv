@@ -19,10 +19,6 @@ invariant snapshotDisabledWithBothCapsDisabled()
 // VS- | Snapshot stamp MUST be always equal to 1
 invariant snapshotStampAlwaysOne() ghostSnapshotStamp == 1;
 
-//
-// lastInterestAccumulatorUpdate
-//
-
 // VS- | last interest accumulator timestamp MUST NOT be in the future
 invariant lastInterestAccumulatorNotInFuture(env e) 
     // Assume it is zero after constructor as it is not possible to set current timestamp as init_axiom state 
@@ -40,6 +36,11 @@ invariant timestampSetWhenPositiveAccumulatedFees(env e)
             requireValidTimeStamp(e, eFunc);
         } 
     }
+
+// VS- | Cash amount MUST NOT be less than the ERC20 assets stored in the current contract
+invariant cashNotLessThanAssets() ghostErc20Balances[currentContract] >= ghostCash;
+
+
 
 ///////////////////////////////////////////////////////////////////////////////////////
 

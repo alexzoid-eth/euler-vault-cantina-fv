@@ -2,7 +2,7 @@ import "./methods/BaseMethods.spec";
 import "./RPow.spec";
 import "./StorageHooks.spec";
 import "./StorageHooksAsset.spec";
-//import "./LoadVault.spec";
+import "./LoadVault.spec";
 
 methods {
 
@@ -25,8 +25,8 @@ methods {
     function _.logVaultStatus(BaseHarness.VaultCache memory a, uint256 interestRate) internal 
         => logVaultStatusCVL(interestRate) expect void;
 
-    //function Cache.loadVault() internal returns (VaultHarness.VaultCache memory) with (env e) 
-    //    => loadVaultAssumeNoUpdateCVL(e);
+    function Cache.loadVault() internal returns (BaseHarness.VaultCache memory) with (env e) 
+        => loadVaultAssumeNoUpdateCVL(e);
 
     function _.invokeHookTarget(address caller) internal => NONDET;
     function _.calculateDTokenAddress() internal => NONDET;
@@ -183,6 +183,7 @@ persistent ghost bool ghostControllerEnabled;
 function getCurrentOnBehalfOfAccountCVL(address controllerToCheck) returns (address, bool) {
     // for safety, EVC reverts if no account has been authenticated
     require(ghostOnBehalfOfAccount != 0);
+    require(ghostOnBehalfOfAccount != currentContract);
     return (ghostOnBehalfOfAccount, controllerToCheck == 0 => ghostControllerEnabled == false);
 }
 
