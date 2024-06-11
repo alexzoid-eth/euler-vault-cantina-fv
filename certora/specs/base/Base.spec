@@ -1,8 +1,8 @@
+import "./methods/BaseMethods.spec";
 import "./RPow.spec";
-import "./Storage.spec";
+import "./StorageHooks.spec";
+import "./StorageHooksAsset.spec";
 //import "./LoadVault.spec";
-
-using DummyERC20A as _ERC20A;
 
 methods {
 
@@ -77,6 +77,12 @@ methods {
     function _.computeInterestRateView(address vault, uint256 cash, uint256 borrows) external => NONDET;
 
     //
+    // FlashLoan
+    //
+
+    function _.onFlashLoan(bytes) external => NONDET;
+
+    //
     // Asset
     //
     
@@ -115,6 +121,12 @@ methods {
     function _.isVaultStatusCheckDeferred(address vault) external => NONDET;
     function _.getLastAccountStatusCheckTimestamp(address account) external => NONDET;
     function _.isControllerEnabled(address account, address vault) external => NONDET;
+
+    //
+    // SequenceRegistry
+    //
+
+    function _.reserveSeqId(string) external => NONDET;
 }
 
 definition CONFIG_SCALE() returns mathint = 10^4;
@@ -122,7 +134,16 @@ definition CONFIG_SCALE() returns mathint = 10^4;
 definition CHECKACCOUNT_NONE() returns address = 0;
 definition CHECKACCOUNT_CALLER() returns address = 1;
 
+definition TIMESTAMP_3000_YEAR() returns mathint = 32499081600;
+
 ////////////////// FUNCTIONS //////////////////////
+
+function requireValidTimeStamp(env eInv, env eFunc) {
+    require(eInv.block.timestamp == eFunc.block.timestamp);
+    require(eFunc.block.timestamp > 0);
+    // There is a safe accumption limit timestamp to 3000 year
+    require(to_mathint(eFunc.block.timestamp) < TIMESTAMP_3000_YEAR());
+}
 
 ghost CVLGetQuote(uint256, address, address) returns uint256 {
     // The total value returned by the oracle is assumed < 2**230-1.
@@ -188,15 +209,15 @@ function reentrantViewSenderRequirementCVL(env e) {
 // Summarize trySafeTransferFrom as DummyERC20 transferFrom
 function trySafeTransferFromCVL(env e, address from, address to, uint256 value) returns (bool, bytes) {
     bytes ret; // Ideally bytes("") if there is a way to do this
-    return (_ERC20A.transferFrom(e, from, to, value), ret);
+    return (_Asset.transferFrom(e, from, to, value), ret);
 }
 
 persistent ghost address ghostOracleAddress;
 persistent ghost address ghostUnitOfAccount;
 function metadataCVL() returns (address, address, address) {
-    require(ghostOracleAddress != _ERC20A);
+    require(ghostOracleAddress != _Asset);
     require(ghostOracleAddress != ghostUnitOfAccount);
-    return (_ERC20A, ghostOracleAddress, ghostUnitOfAccount);
+    return (_Asset, ghostOracleAddress, ghostUnitOfAccount);
 }
 
 function CVLMulDiv(uint144 a, uint256 b, uint256 c) returns uint144 {

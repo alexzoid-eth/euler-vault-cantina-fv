@@ -26,6 +26,12 @@ Additionally, each property is assigned a mutation status:
 - ❎ Mutation Caught
 - ❗ Mutation Skipped
 
+## Valid_State
+
+| Property | Description | Category | Tag | Entries | Mutation | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| VS- |  |  |  |  |  | ✅ |
+
 ## Governance_Base
 
 | Property | Description | Category | Tag | Entries | Mutation | Status |
@@ -64,6 +70,7 @@ Additionally, each property is assigned a mutation status:
 
 | Property | Description | Category | Tag | Entries | Mutation | Status |
 | --- | --- | --- | --- | --- | --- | --- |
+| GOV-78 | The specified LTV is a fraction between 0 and 1 (scaled by 10,000) |  |  |  |  | ❌ |
 | GOV-22 | The fee receiver address can be changed |  | Fees | `setFeeReceiver` |  | ✅ |
 | GOV-23 | While distributing fees, external protocol config contract is used |  | Fees | `convertFees` | [Governance_Fees/1.sol](mutations/Governance_Fees/1.sol) | ✅❎ |
 | GOV-75 | Update the protocol (Euler DAO's) receiver and fee amount for the current contract MUST affect the state |  | Fees | `convertFees` | [Governance_Fees/2.sol](mutations/Governance_Fees/2.sol) | ❌|
@@ -72,35 +79,21 @@ Additionally, each property is assigned a mutation status:
 | GOV-24 | If the governor receiver was not set, the protocol gets all fees |  | Fees | `convertFees` |  | ✅ |
 | GOV-25 | Protocol's fee share MUST NOT be more than the max protocol fee share (50%) |  | Fees | `convertFees` |  | ✅ |
 | GOV-26 | While distributing fees, total shares MUST not changed and accumulated fees are cleared |  | Fees | `convertFees` |  | ✅ |
-| GOV-78 | Accumulated fees MUST be less or equal total shares | Valid State | Fees | `convertFees` |  | ✅ |
 | GOV-27 | While distributing fees, shares are transferred to governor and protocol fee receiver addresses |  | Fees | `convertFees` |  | ✅ |
-| GOV-28 | Fee shares cannot be transferred to the zero address |  | Fees | `convertFees` |  | ✅ |
 | GOV-29 | Accumulated fees only increase when some time has passed |  | Fees | `convertFees` |  | ✅ |
 | GOV-30 | Fees are retrieved only for the contract itself from the protocol config contract |  | Fees | `convertFees` |  | ✅ |
+| GOV-34 | Ramp duration can be used only when lowering liquidation LTV |  | Liquidation | `SetLTV` |  | ✅ |
+| GOV-35 | The LTV can be set for a collateral asset, including borrow LTV, liquidation LTV, and ramp duration |  | Liquidation | `SetLTV` |  | ✅ |
+| GOV-79 | Collateral LTV MUST NOT be removed completely |  | Liquidation | `SetLTV` |  | ✅ |
+| GOV-41 | Initial liquidation LTV is always the previous liquidation LTV or greater than liquidation LTV when ramping |  | Liquidation | `SetLTV` |  | ❌ |
+| GOV-42 | LTV can be increased or decreased immediately |  | Liquidation | `SetLTV` |  | ✅ |
+| GOV-43 | Liquidation LTV is calculated dynamically only when ramping is in progress (target timestamp is in the future and liquidation LTV is less than the initial liquidation LTV) |  | Liquidation | `SetLTV` |  | ❌ |
+| GOV-45 | When ramping is in progress, the time remaining is always less than or equal to the ramp duration |  | Liquidation | `SetLTV` |  |  ❌|
 
 ## Governance_Other
 
 | Property | Description | Category | Tag | Entries | Mutation | Status |
 | --- | --- | --- | --- | --- | --- | --- |
-| GOV-31 | The specified LTV is a fraction between 0 and 1 (scaled by 10,000) |  | Liquidation | `SetLTV` |  | ❌ |
-| GOV-32 | Self-collateralization is not allowed |  | Liquidation | `SetLTV` |  | ✅ |
-| GOV-33 | The borrow LTV MUST be lower than or equal to the liquidation LTV |  | Liquidation | `SetLTV` |  | ✅ |
-| GOV-34 | Ramp duration can be used only when lowering liquidation LTV |  | Liquidation | `SetLTV` |  | ✅ |
-| GOV-35 | The LTV can be set for a collateral asset, including borrow LTV, liquidation LTV, and ramp duration |  | Liquidation | `SetLTV` |  | ✅ |
-| GOV-36 | All collateral entries in the vault storage LTV list MUST be unique |  | Liquidation | `SetLTV` |  | ✅ |
-| GOV-37 | The LTV is always initialized when set |  | Liquidation | `SetLTV` |  | ✅ |
-| GOV-79 | Collateral LTV MUST NOT be removed completely |  | Liquidation | `SetLTV` |  | ✅ |
-| GOV-38 | LTV with zero timestamp should not be initialized and vice versa |  | Liquidation | `SetLTV` |  | ✅ |
-| GOV-39 | LTV's timestamp is always less than or equal to the current timestamp |  | Liquidation | `SetLTV` |  | ✅ |
-| GOV-40 | LTV's timestamp MUST be in the future only when ramping set |  | Liquidation | `SetLTV` |  | ✅ |
-| GOV-41 | Initial liquidation LTV is always the previous liquidation LTV or greater than liquidation LTV when ramping |  | Liquidation | `SetLTV` |  | ❌ |
-| GOV-42 | LTV can be increased or decreased immediately |  | Liquidation | `SetLTV` |  | ✅ |
-| GOV-43 | Liquidation LTV is calculated dynamically only when ramping is in progress (target timestamp is in the future and liquidation LTV is less than the initial liquidation LTV) |  | Liquidation | `SetLTV` |  | ❌ |
-| GOV-44 | Initialized LTV exists in collaterals list |  | Liquidation | `SetLTV` |  | ✅ |
-| GOV-45 | When ramping is in progress, the time remaining is always less than or equal to the ramp duration |  | Liquidation | `SetLTV` |  |  ❌|
-| GOV-46 | Zero timestamp means the LTV is cleared not set yet |  | Liquidation | `clearLTV` |  | ✅ |
-| GOV-47 |  |  | Liquidation | `clearLTV` |  |  |
-| GOV-48 | Config parameters are scaled to `1e4` |  | Liquidation | `setMaxLiquidationDiscount` |  | ✅ |
 | GOV-50 | The interest rate model can be changed |  | Interest | `setInterestRateModel` |  |  |
 | GOV-51 | Cached interest rate is cleared when the interest rate model is set |  | Interest | `setInterestRateModel` |  |  |
 | GOV-52 | While calculating the interest rate, the cached value will be used if the interest rate model is not set or the call to the interest rate model was not successful |  | Interest | `setInterestRateModel` |  |  |
@@ -148,6 +141,8 @@ Additionally, each property is assigned a mutation status:
 | Property | Description | Category | Tag | Entries | Mutation | Status |
 | --- | --- | --- | --- | --- | --- | --- |
 | VLT-83 | User's balance MUST NOT increase after performing both input and output transactions within a single block |  | 1 | `deposit`, `mint`, `withdraw`, `redeem` |  |  |
+| VLT- | Snapshot cash MUST set from storage cash or reset |  | 1 |  |  |  |
+| VLT- | Snapshot total borrow assets MUST set from storage total borrow shares, rounding up |  | 1 |  |  |  |
 
 ## Vault_Other
 

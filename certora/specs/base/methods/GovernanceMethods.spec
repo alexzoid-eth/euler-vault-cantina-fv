@@ -5,8 +5,8 @@ methods {
     // GovernanceHarness
     function isSenderGovernor() external returns (bool);
     function accumulatedFees() external returns (uint256);
-    function getLTVConfig(address) external returns (GovernanceHarness.LTVConfig memory) envfree;
-    function getBalanceAndForwarderExt(address) external returns (GovernanceHarness.Shares, bool) envfree;
+    function getLTVConfig(address) external returns (BaseHarness.LTVConfig memory) envfree;
+    function getBalanceAndForwarderExt(address) external returns (BaseHarness.Shares, bool) envfree;
 
     // Governance
     function governorAdmin() external returns (address) envfree;

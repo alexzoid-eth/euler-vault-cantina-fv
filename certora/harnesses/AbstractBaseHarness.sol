@@ -4,6 +4,7 @@ pragma solidity ^0.8.0;
 
 import {IEVC} from "ethereum-vault-connector/interfaces/IEthereumVaultConnector.sol";
 import "../../src/EVault/shared/Base.sol";
+import "../../src/EVault/modules/Initialize.sol";
 
 // This exists so that Base.LTVConfig and other type declarations 
 // are available in CVL and can be used across specs for different modules.
@@ -11,7 +12,15 @@ import "../../src/EVault/shared/Base.sol";
 // so that we can refer to Base.LTVConfig as a type in shared CVL functions
 // while also making function definitions sharable among harnesses via
 // AbstractBase. AbstractBaseHarness includes the shared function definitions.
-abstract contract AbstractBaseHarness is Base {
+abstract contract AbstractBaseHarness is InitializeModule  {
+
+    constructor() {
+        initialize(msg.sender);
+    }
+
+    function borrowsToAssetsUp(uint256 amount) public returns (uint256) {
+        return TypesLib.toAssets(OwedLib.toAssetsUpUint(amount)).toUint();
+    }
 
     function vaultCacheOracleConfigured() external returns (bool) {
         return address(loadVault().oracle) != address(0);

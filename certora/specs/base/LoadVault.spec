@@ -24,7 +24,7 @@ function loadVaultAssumeNoUpdateCVL(env e) returns VaultHarness.VaultCache {
     require vaultCache.configFlags == storage_configFlags();
     require vaultCache.snapshotInitialized == storage_snapshotInitialized();
 
-    require vaultCache.asset == _ERC20A;
+    require vaultCache.asset == _Asset;
     require vaultCache.asset == asset();
     require vaultCache.oracle == ghostOracleAddress;
     require vaultCache.unitOfAccount == ghostUnitOfAccount;
@@ -83,7 +83,7 @@ function loadVaultCVL(env e) returns VaultHarness.VaultCache {
     require vaultCache.configFlags == storage_configFlags();
     require vaultCache.snapshotInitialized == storage_snapshotInitialized();
 
-    require vaultCache.asset == _ERC20A;
+    require vaultCache.asset == _Asset;
     require vaultCache.asset == asset();
     require vaultCache.oracle == ghostOracleAddress;
     require vaultCache.unitOfAccount == ghostUnitOfAccount;

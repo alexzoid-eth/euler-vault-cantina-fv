@@ -1,15 +1,16 @@
 methods {
     
     // AbstractBaseHarness
+    function borrowsToAssetsUp(uint256 amount) external returns (uint256) envfree;
     function vaultCacheOracleConfigured() external returns (bool);
-    function isAccountStatusCheckDeferredExt(address) external returns (bool);
-    function getBalance(address) external returns (uint256) envfree;
-    function isBalanceAndBalanceEnabled(address) external returns (bool) envfree;
-    function vaultIsOnlyController(address) external returns (bool);
-    function vaultIsController(address) external returns (bool);
-    function getCollateralsExt(address) external returns (address[] memory);
-    function isCollateralEnabledExt(address, address) external returns (bool);
-    function isOperationDisabledExt(uint32) external returns (bool);
+    function isAccountStatusCheckDeferredExt(address account) external returns (bool);
+    function getBalance(address account) external returns (uint256) envfree;
+    function isBalanceAndBalanceEnabled(address account) external returns (bool) envfree;
+    function vaultIsOnlyController(address account) external returns (bool);
+    function vaultIsController(address account) external returns (bool);
+    function getCollateralsExt(address account) external returns (address[] memory);
+    function isCollateralEnabledExt(address account, address market) external returns (bool);
+    function isOperationDisabledExt(uint32 operation) external returns (bool);
     function isDepositDisabled() external returns (bool);
     function isMintDisabled() external returns (bool);
     function isWithdrawDisabled() external returns (bool);
@@ -19,12 +20,14 @@ methods {
     function hookTarget() external returns (address) envfree;
     function totalShares() external returns (uint256);
     function isHookNotSetConvertFees() external returns (bool) envfree;
-    function collateralExists(address) external returns (bool) envfree;
+    function collateralExists(address collateral) external returns (bool) envfree;
     function ltvListLength() external returns (uint256) envfree;
 }
 
 definition BASE_HARNESS_METHODS(method f) returns bool = 
-    f.selector == sig:vaultCacheOracleConfigured().selector
+    f.selector == sig:initialize(address).selector
+    || f.selector == sig:borrowsToAssetsUp(uint256).selector
+    || f.selector == sig:vaultCacheOracleConfigured().selector
     || f.selector == sig:isAccountStatusCheckDeferredExt(address).selector
     || f.selector == sig:getBalance(address).selector
     || f.selector == sig:isBalanceAndBalanceEnabled(address).selector

@@ -1,13 +1,85 @@
+///////////////////// EVK /////////////////////////
+
+//
+// initialized
+//
+
+persistent ghost bool ghostInitialized {
+    // Set in initialize module
+    init_state axiom ghostInitialized == true;
+}
+
+hook Sload bool val currentContract.initialized {
+    require(ghostInitialized == val);
+} 
+
+hook Sstore currentContract.initialized bool val {
+    ghostInitialized = val;
+}
+
+//
+// snapshot.cash
+//
+
+persistent ghost mathint ghostSnapshotCash {
+    init_state axiom ghostSnapshotCash == 0;
+    axiom ghostSnapshotCash >= 0 && ghostSnapshotCash <= max_uint112;
+}
+
+hook Sload BaseHarness.Assets val currentContract.snapshot.cash {
+    require(require_uint112(ghostSnapshotCash) == val);
+} 
+
+hook Sstore currentContract.snapshot.cash BaseHarness.Assets val {
+    ghostSnapshotCash = val;
+}
+
+//
+// snapshot.borrows
+//
+
+persistent ghost mathint ghostSnapshotBorrows {
+    init_state axiom ghostSnapshotBorrows == 0;
+    axiom ghostSnapshotBorrows >= 0 && ghostSnapshotBorrows <= max_uint112;
+}
+
+hook Sload BaseHarness.Assets val currentContract.snapshot.borrows {
+    require(require_uint112(ghostSnapshotBorrows) == val);
+} 
+
+hook Sstore currentContract.snapshot.borrows BaseHarness.Assets val {
+    ghostSnapshotBorrows = val;
+}
+
+//
+// snapshot.stamp
+//
+
+persistent ghost mathint ghostSnapshotStamp {
+    // Set in initialize module
+    init_state axiom ghostSnapshotStamp == 1;
+    axiom ghostSnapshotStamp >= 0 && ghostSnapshotStamp <= max_uint32;
+}
+
+hook Sload uint32 val currentContract.snapshot.stamp {
+    require(require_uint32(ghostSnapshotStamp) == val);
+} 
+
+hook Sstore currentContract.snapshot.stamp uint32 val {
+    ghostSnapshotStamp = val;
+}
+
 //
 // vaultStorage.lastInterestAccumulatorUpdate
 //
 
-persistent ghost uint48 ghostLastInterestAccumulatorUpdate {
+persistent ghost mathint ghostLastInterestAccumulatorUpdate {
     init_state axiom ghostLastInterestAccumulatorUpdate == 0;
+    axiom ghostLastInterestAccumulatorUpdate >= 0 && ghostLastInterestAccumulatorUpdate <= max_uint48;
 }
 
 hook Sload uint48 val currentContract.vaultStorage.lastInterestAccumulatorUpdate {
-    require(ghostLastInterestAccumulatorUpdate == val);
+    require(require_uint48(ghostLastInterestAccumulatorUpdate) == val);
 } 
 
 hook Sstore currentContract.vaultStorage.lastInterestAccumulatorUpdate uint48 val {
@@ -18,8 +90,9 @@ hook Sstore currentContract.vaultStorage.lastInterestAccumulatorUpdate uint48 va
 // vaultStorage.cash
 //
 
-persistent ghost uint112 ghostCash {
+persistent ghost mathint ghostCash {
     init_state axiom ghostCash == 0;
+    axiom ghostCash >= 0 && ghostCash <= max_uint112;
 }
 
 hook Sload BaseHarness.Assets val currentContract.vaultStorage.cash {
@@ -36,6 +109,7 @@ hook Sstore currentContract.vaultStorage.cash BaseHarness.Assets val {
 
 persistent ghost mathint ghostSupplyCap {
     init_state axiom ghostSupplyCap == 0;
+    axiom ghostSupplyCap >= 0 && ghostSupplyCap <= max_uint16;
 }
 
 hook Sload BaseHarness.AmountCap val currentContract.vaultStorage.supplyCap {
@@ -52,6 +126,7 @@ hook Sstore currentContract.vaultStorage.supplyCap BaseHarness.AmountCap val {
 
 persistent ghost mathint ghostBorrowCap {
     init_state axiom ghostBorrowCap == 0;
+    axiom ghostBorrowCap >= 0 && ghostBorrowCap <= max_uint16;
 }
 
 hook Sload BaseHarness.AmountCap val currentContract.vaultStorage.borrowCap {
@@ -68,6 +143,7 @@ hook Sstore currentContract.vaultStorage.borrowCap BaseHarness.AmountCap val {
 
 persistent ghost mathint ghostHookedOps {
     init_state axiom ghostHookedOps == 0;
+    axiom ghostHookedOps >= 0 && ghostHookedOps <= max_uint32;
 }
 
 hook Sload BaseHarness.Flags val currentContract.vaultStorage.hookedOps {
@@ -116,6 +192,7 @@ hook Sstore currentContract.vaultStorage.snapshotInitialized bool val {
 
 persistent ghost mathint ghostTotalShares {
     init_state axiom ghostTotalShares == 0;
+    axiom ghostTotalShares >= 0 && ghostTotalShares <= max_uint112;
 }
 
 hook Sload BaseHarness.Shares val currentContract.vaultStorage.totalShares {
@@ -132,6 +209,7 @@ hook Sstore currentContract.vaultStorage.totalShares BaseHarness.Shares val {
 
 persistent ghost mathint ghostTotalBorrows {
     init_state axiom ghostTotalBorrows == 0;
+    axiom ghostTotalBorrows >= 0 && ghostTotalBorrows <= max_uint144;
 }
 
 hook Sload BaseHarness.Owed val currentContract.vaultStorage.totalBorrows {
@@ -148,6 +226,7 @@ hook Sstore currentContract.vaultStorage.totalBorrows BaseHarness.Owed val {
 
 persistent ghost mathint ghostAccumulatedFees {
     init_state axiom ghostAccumulatedFees == 0;
+    axiom ghostAccumulatedFees >= 0 && ghostAccumulatedFees <= max_uint112;
 }
 
 hook Sload BaseHarness.Shares val currentContract.vaultStorage.accumulatedFees {
@@ -164,6 +243,7 @@ hook Sstore currentContract.vaultStorage.accumulatedFees BaseHarness.Shares val 
 
 persistent ghost mathint ghostMaxLiquidationDiscount {
     init_state axiom ghostMaxLiquidationDiscount == 0;
+    axiom ghostMaxLiquidationDiscount >= 0 && ghostMaxLiquidationDiscount <= max_uint16;
 }
 
 hook Sload BaseHarness.ConfigAmount val currentContract.vaultStorage.maxLiquidationDiscount {
@@ -180,6 +260,7 @@ hook Sstore currentContract.vaultStorage.maxLiquidationDiscount BaseHarness.Conf
 
 persistent ghost mathint ghostLiquidationCoolOffTime {
     init_state axiom ghostLiquidationCoolOffTime == 0;
+    axiom ghostLiquidationCoolOffTime >= 0 && ghostLiquidationCoolOffTime <= max_uint16;
 }
 
 hook Sload uint16 val currentContract.vaultStorage.liquidationCoolOffTime {
@@ -196,6 +277,7 @@ hook Sstore currentContract.vaultStorage.liquidationCoolOffTime uint16 val {
 
 persistent ghost mathint ghostConfigFlags {
     init_state axiom ghostConfigFlags == 0;
+    axiom ghostConfigFlags >= 0 && ghostConfigFlags <= max_uint32;
 }
 
 hook Sload BaseHarness.Flags val currentContract.vaultStorage.configFlags {
@@ -210,12 +292,13 @@ hook Sstore currentContract.vaultStorage.configFlags BaseHarness.Flags val {
 // vaultStorage.interestAccumulator
 //
 
-persistent ghost uint256 ghostInterestAccumulator {
-    init_state axiom ghostInterestAccumulator == 0;
+persistent ghost mathint ghostInterestAccumulator {
+    init_state axiom ghostInterestAccumulator == 0; 
+    axiom ghostInterestAccumulator >= 0 && ghostInterestAccumulator <= max_uint256;
 }
 
 hook Sload uint256 val currentContract.vaultStorage.interestAccumulator {
-    require(ghostInterestAccumulator == val);
+    require(require_uint256(ghostInterestAccumulator) == val);
 } 
 
 hook Sstore currentContract.vaultStorage.interestAccumulator uint256 val {
@@ -244,6 +327,7 @@ hook Sstore currentContract.vaultStorage.interestRateModel address val {
 
 persistent ghost mathint ghostInterestFee {
     init_state axiom ghostInterestFee == 0;
+    axiom ghostInterestFee >= 0 && ghostInterestFee <= max_uint16;
 }
 
 hook Sload BaseHarness.ConfigAmount val currentContract.vaultStorage.interestFee {
@@ -258,12 +342,13 @@ hook Sstore currentContract.vaultStorage.interestFee BaseHarness.ConfigAmount va
 // vaultStorage.interestRate
 //
 
-persistent ghost uint72 ghostInterestRate {
+persistent ghost mathint ghostInterestRate {
     init_state axiom ghostInterestRate == 0;
+    axiom ghostInterestRate >= 0 && ghostInterestRate <= max_uint72;
 }
 
 hook Sload uint72 val currentContract.vaultStorage.interestRate {
-    require(ghostInterestRate == val);
+    require(require_uint72(ghostInterestRate) == val);
 } 
 
 hook Sstore currentContract.vaultStorage.interestRate uint72 val {
@@ -340,6 +425,7 @@ hook Sstore currentContract.vaultStorage.hookTarget address val {
 
 persistent ghost mapping (address => mathint) ghostUsersData {
     init_state axiom forall address i. ghostUsersData[i] == 0;
+    axiom forall address i. ghostUsersData[i] >= 0 && ghostUsersData[i] <= max_uint256;
 }
 
 hook Sload BaseHarness.PackedUserSlot val currentContract.vaultStorage.users[KEY address i].data {
@@ -356,6 +442,7 @@ hook Sstore currentContract.vaultStorage.users[KEY address i].data BaseHarness.P
 
 persistent ghost mapping (address => mathint) ghostUsersInterestAccumulator {
     init_state axiom forall address i. ghostUsersInterestAccumulator[i] == 0;
+    axiom forall address i. ghostUsersInterestAccumulator[i] >= 0 && ghostUsersInterestAccumulator[i] <= max_uint256;
 }
 
 hook Sload uint256 val currentContract.vaultStorage.users[KEY address i].interestAccumulator {
@@ -372,6 +459,7 @@ hook Sstore currentContract.vaultStorage.users[KEY address i].interestAccumulato
 
 persistent ghost mapping (address => mapping (address => mathint)) ghostUsersETokenAllowance {
     init_state axiom forall address i. forall address j. ghostUsersETokenAllowance[i][j] == 0;
+    axiom forall address i. forall address j. ghostUsersETokenAllowance[i][j] >= 0 && ghostUsersETokenAllowance[i][j] <= max_uint256;
 }
 
 hook Sload uint256 val currentContract.vaultStorage.users[KEY address i].eTokenAllowance[KEY address j] {
@@ -388,6 +476,7 @@ hook Sstore currentContract.vaultStorage.users[KEY address i].eTokenAllowance[KE
 
 persistent ghost mapping (address => mathint) ghostBorrowLTV {
     init_state axiom forall address i. ghostBorrowLTV[i] == 0;
+    axiom forall address i. ghostBorrowLTV[i] >= 0 && ghostBorrowLTV[i] <= max_uint16;
 }
 
 hook Sload BaseHarness.ConfigAmount val currentContract.vaultStorage.ltvLookup[KEY address i].borrowLTV {
@@ -404,10 +493,7 @@ hook Sstore currentContract.vaultStorage.ltvLookup[KEY address i].borrowLTV Base
 
 persistent ghost mapping (address => mathint) ghostLiquidationLTV {
     init_state axiom forall address i. ghostLiquidationLTV[i] == 0;
-}
-
-persistent ghost mapping (address => mathint) ghostLiquidationLTVPrev {
-    init_state axiom forall address i. ghostLiquidationLTVPrev[i] == 0;
+    axiom forall address i. ghostLiquidationLTV[i] >= 0 && ghostLiquidationLTV[i] <= max_uint16;
 }
 
 hook Sload BaseHarness.ConfigAmount val currentContract.vaultStorage.ltvLookup[KEY address i].liquidationLTV {
@@ -415,7 +501,6 @@ hook Sload BaseHarness.ConfigAmount val currentContract.vaultStorage.ltvLookup[K
 } 
 
 hook Sstore currentContract.vaultStorage.ltvLookup[KEY address i].liquidationLTV BaseHarness.ConfigAmount val {
-    ghostLiquidationLTVPrev[i] = ghostLiquidationLTV[i];
     ghostLiquidationLTV[i] = val;
 }
 
@@ -425,6 +510,7 @@ hook Sstore currentContract.vaultStorage.ltvLookup[KEY address i].liquidationLTV
 
 persistent ghost mapping (address => mathint) ghostInitialLiquidationLTV {
     init_state axiom forall address i. ghostInitialLiquidationLTV[i] == 0;
+    axiom forall address i. ghostInitialLiquidationLTV[i] >= 0 && ghostInitialLiquidationLTV[i] <= max_uint16;
 }
 
 hook Sload BaseHarness.ConfigAmount val currentContract.vaultStorage.ltvLookup[KEY address i].initialLiquidationLTV {
@@ -439,12 +525,13 @@ hook Sstore currentContract.vaultStorage.ltvLookup[KEY address i].initialLiquida
 // vaultStorage.ltvLookup[].targetTimestamp
 //
 
-persistent ghost mapping (address => uint48) ghostLtvTargetTimestamp {
+persistent ghost mapping (address => mathint) ghostLtvTargetTimestamp {
     init_state axiom forall address i. ghostLtvTargetTimestamp[i] == 0;
+    axiom forall address i. ghostInitialLiquidationLTV[i] >= 0 && ghostInitialLiquidationLTV[i] <= max_uint48;
 }
 
 hook Sload uint48 val currentContract.vaultStorage.ltvLookup[KEY address i].targetTimestamp {
-    require(ghostLtvTargetTimestamp[i] == val);
+    require(require_uint48(ghostLtvTargetTimestamp[i]) == val);
 } 
 
 hook Sstore currentContract.vaultStorage.ltvLookup[KEY address i].targetTimestamp uint48 val {
@@ -457,10 +544,7 @@ hook Sstore currentContract.vaultStorage.ltvLookup[KEY address i].targetTimestam
 
 persistent ghost mapping (address => mathint) ghostLtvRampDuration {
     init_state axiom forall address i. ghostLtvRampDuration[i] == 0;
-}
-
-persistent ghost mapping (address => mathint) ghostLtvRampDurationPrev {
-    init_state axiom forall address i. ghostLtvRampDurationPrev[i] == 0;
+    axiom forall address i. ghostLtvRampDuration[i] >= 0 && ghostLtvRampDuration[i] <= max_uint32;
 }
 
 hook Sload uint32 val currentContract.vaultStorage.ltvLookup[KEY address i].rampDuration {
@@ -468,7 +552,6 @@ hook Sload uint32 val currentContract.vaultStorage.ltvLookup[KEY address i].ramp
 } 
 
 hook Sstore currentContract.vaultStorage.ltvLookup[KEY address i].rampDuration uint32 val {
-    ghostLtvRampDurationPrev[i] = ghostLtvRampDuration[i];
     ghostLtvRampDuration[i] = val;
 }
 
@@ -503,3 +586,6 @@ hook Sload address val currentContract.vaultStorage.ltvList[INDEX uint256 i] {
 hook Sstore currentContract.vaultStorage.ltvList[INDEX uint256 i] address val {
     ghostLTVList[i] = val;
 }
+
+//////////////////// ASSET ////////////////////////
+

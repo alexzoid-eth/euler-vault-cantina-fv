@@ -1,6 +1,5 @@
 import "./base/Governance.spec";
-
-definition TIMESTAMP_3000_YEAR() returns uint48 = 32499081600;
+import "./ValidState.spec";
 
 function updateVaultFeeConfigCVL(address vault) {
 
@@ -16,12 +15,9 @@ function updateVaultFeeConfigCVL(address vault) {
     ghostProtocolFeeShare[vault] = newProtocolFeeShare;
 }
 
-function requireValidTimeStamp(env eInv, env eFunc) {
-    require(eInv.block.timestamp == eFunc.block.timestamp);
-    require(eFunc.block.timestamp > 0);
-    // There is a safe accumption limit timestamp to 3000 year
-    require(require_uint48(eFunc.block.timestamp) < TIMESTAMP_3000_YEAR());
-}
+// GOV-78 | The specified LTV is a fraction between 0 and 1 (scaled by 10,000)
+invariant ltvFractionScaled(env e, address collateral) to_mathint(LTVBorrow(e, collateral)) <= CONFIG_SCALE()
+    && to_mathint(LTVLiquidation(e, collateral)) <= CONFIG_SCALE();
 
 // GOV-22 | The fee receiver address can be changed
 rule feeReceiverCanBeTransferred(env e, address newFeeReceiver) {
@@ -45,7 +41,7 @@ rule protocolFeeConfigCalled(env e) {
     satisfy(ghostProtocolFeeConfigCalled);
 }
 
-// @todo GOV-75 | Update the protocol (Euler DAO's) receiver and fee amount for the current 
+// GOV-75 | Update the protocol (Euler DAO's) receiver and fee amount for the current 
 //  contract MUST affect the state
 rule protocolFeeParamsAffectState(env e) {
 
@@ -148,14 +144,8 @@ rule maxProtocolFeeShareEnforced(env e) {
     assert(governor != 0 => governorGotShares >= protocolGotShares - 1);
 }
 
-// GOV-78 | Accumulated fees MUST be less or equal total shares
-invariant accumulatedFeesLETotalShares(env e) accumulatedFees(e) <= totalShares(e) 
-    filtered { f -> !HARNESS_METHODS(f) }
-
 // GOV-26 | While distributing fees, total shares MUST not changed and accumulated fees are cleared
 rule feesDistributionClearAccumulatedFeesNotAffectTotalShares(env e) {
-
-    requireInvariant accumulatedFeesLETotalShares(e);
 
     mathint accumulatedFeesBefore = accumulatedFees(e);
     mathint totalSharesBefore = totalShares(e);
@@ -187,10 +177,6 @@ rule governorAndProtocolReceiveFees(env e) {
     satisfy(protocolBalanceAfter > protocolBalanceBefore);     
 }
 
-// GOV-28 | Fee shares cannot be transferred to the zero address
-invariant validateFeeReceiverAddress() getBalance(0) == 0
-    filtered { f -> !HARNESS_METHODS(f) }
-
 // GOV-29 | Accumulated fees only increase when some time has passed
 rule feesIncreaseOverTime(env e1, env e2, method f1, method f2, calldataarg args1, calldataarg args2) 
     // Exclude view functions and `convertFees()` to reduce complexity
@@ -216,21 +202,6 @@ rule feesIncreaseOverTime(env e1, env e2, method f1, method f2, calldataarg args
 // GOV-30 | Fees are retrieved only for the contract itself from the protocol config contract
 invariant feesRetrievedForCurrentContract(env e) ghostProtocolFeeRequestedVault == currentContract
     filtered { f -> !HARNESS_METHODS(f) }
-
-// @todo GOV-31 | The specified LTV is a fraction between 0 and 1 (scaled by 10,000)
-invariant ltvFractionScaled(env e, address collateral) to_mathint(LTVBorrow(e, collateral)) <= CONFIG_SCALE()
-    && to_mathint(LTVLiquidation(e, collateral)) <= CONFIG_SCALE()
-    filtered { f -> !HARNESS_METHODS(f) }
-
-// GOV-32 | Self-collateralization is not allowed
-invariant noSelfCollateralization(env e) LTVBorrow(e, currentContract) == 0 
-    && LTVLiquidation(e, currentContract) == 0
-    filtered { f -> !HARNESS_METHODS(f) }
-
-// GOV-33 | The borrow LTV must be lower than or equal to the liquidation LTV
-invariant borrowLTVLowerOrEqualLiquidationLTV(address collateral) 
-    ghostBorrowLTV[collateral] <= ghostLiquidationLTV[collateral]
-    filtered { f -> !HARNESS_METHODS(f) } 
 
 // GOV-34 | Ramp duration can be used only when lowering liquidation LTV
 rule rampDurationOnlyWhenLoweringLiquidationLTV(env e, method f, calldataarg args, address collateral)
@@ -283,15 +254,6 @@ rule setLTVPossibility(env e, calldataarg args, address collateral) {
     satisfy(rampDuration != _rampDuration);
 }
 
-// GOV-36 | All collateral entries in the vault storage LTV list MUST be unique
-invariant uniqueLTVEntries() forall mathint i. forall mathint j. ghostLTVList[i] != ghostLTVList[j]
-    filtered { f -> !HARNESS_METHODS(f) }
-
-// GOV-37 | The LTV is always initialized when set
-invariant initializedLTVWhenSet(env e, address collateral) 
-    LTVBorrow(e, collateral) != 0 || LTVLiquidation(e, collateral) != 0 => ghostLtvInitialized[collateral]
-    filtered { f -> !HARNESS_METHODS(f) }
-
 // GOV-79 | Collateral LTV MUST NOT be removed completely
 rule collateralLTVNotRemoved(env e, method f, calldataarg args, address collateral) 
     filtered { f -> !HARNESS_METHODS(f) } {
@@ -302,49 +264,24 @@ rule collateralLTVNotRemoved(env e, method f, calldataarg args, address collater
 
     assert(initialized => ghostLtvInitialized[collateral]);
 }
-
-// GOV-38 | LTV with zero timestamp should not be initialized and vice versa
-invariant zeroTimestampInitializedSolvency(env e, address collateral) 
-    ghostLtvTargetTimestamp[collateral] == 0 <=> ghostLtvInitialized[collateral] == false 
-    filtered { f -> !HARNESS_METHODS(f) && f.selector != sig:clearLTV(address).selector } {
-        preserved with (env eFunc) {
-            requireValidTimeStamp(e, eFunc);
-        } 
-    }
-
-// GOV-39 | LTV's timestamp is always less than or equal to the current timestamp
-invariant LTVTimestampValid(env e, address collateral) ghostLtvTargetTimestamp[collateral] == 0 
-    || ghostLtvTargetTimestamp[collateral] >= require_uint48(e.block.timestamp) 
-    filtered { f -> !HARNESS_METHODS(f) } {
-        preserved with (env eFunc) {
-            requireValidTimeStamp(e, eFunc);
-        } 
-    }
-
-// GOV-40 | LTV's timestamp MUST be in the future only when ramping set
-invariant LTVTimestampFutureRamping(env e, address collateral)
-    ghostLtvTargetTimestamp[collateral] > require_uint48(e.block.timestamp) 
-        => (ghostLtvRampDuration[collateral] 
-                >= ghostLtvTargetTimestamp[collateral] - require_uint48(e.block.timestamp)
-                ) 
-    filtered { f -> !HARNESS_METHODS(f) } {
-        preserved with (env eFunc) {
-            requireValidTimeStamp(e, eFunc);
-        } 
-    }
     
-// @todo GOV-41 | Initial liquidation LTV is always the previous liquidation LTV or greater 
+// GOV-41 | Initial liquidation LTV is always the previous liquidation LTV or greater 
 //  than liquidation LTV when ramping
-invariant initialLiquidationLTVSolvency(env e, address collateral) 
-    ghostInitialLiquidationLTV[collateral] == ghostLiquidationLTVPrev[collateral]
-        || ghostInitialLiquidationLTV[collateral] >= ghostLiquidationLTV[collateral]
+rule initialLiquidationLTVSolvency(env e, method f, calldataarg args, address collateral) 
     filtered { f -> !HARNESS_METHODS(f) && f.selector != sig:clearLTV(address).selector } {
-        preserved with (env eFunc) {
-            requireValidTimeStamp(e, eFunc);
-            requireInvariant LTVTimestampFutureRamping(e, collateral);
-            requireInvariant LTVTimestampValid(e, collateral);
-        }
-    }
+
+    require(e.block.timestamp > 0);
+    requireInvariant LTVTimestampFutureRamping(e, collateral);
+    requireInvariant LTVTimestampValid(e, collateral);
+
+    mathint liquidationLTVPrev = ghostLiquidationLTV[collateral];
+
+    f(e, args);
+
+    assert(ghostInitialLiquidationLTV[collateral] == liquidationLTVPrev
+        || ghostInitialLiquidationLTV[collateral] >= ghostLiquidationLTV[collateral]
+    );
+}
 
 // GOV-42 | LTV can be increased or decreased immediately
 rule LTVUpdateImmediate(env e, address collateral, uint16 borrowLTV, uint16 liquidationLTV, uint32 rampDuration) {
@@ -360,7 +297,7 @@ rule LTVUpdateImmediate(env e, address collateral, uint16 borrowLTV, uint16 liqu
         );
 }
 
-// @todo GOV-43 | Liquidation LTV is calculated dynamically only when ramping is in progress and always 
+// GOV-43 | Liquidation LTV is calculated dynamically only when ramping is in progress and always 
 //  between the target liquidation LTV and the initial liquidation LTV
 invariant LTVLiquidationDynamic(env e, address collateral) ghostLtvRampDuration[collateral] > 0
     ? ghostLiquidationLTV[collateral] == to_mathint(LTVLiquidation(e, collateral))
@@ -374,21 +311,11 @@ invariant LTVLiquidationDynamic(env e, address collateral) ghostLtvRampDuration[
         }
     }
 
-// GOV-44 | Initialized LTV exists in collaterals list
-invariant initializedLTVInCollateralList(address collateral) 
-    ghostLtvInitialized[collateral] <=> collateralExists(collateral)
-    filtered { f -> !HARNESS_METHODS(f) } {
-        preserved {
-            // It should not be possible to overflow uint256 list
-            require(ltvListLength() < max_uint64);
-        }
-    }
-
-// @todo GOV-45 | When ramping is in progress, the time remaining is always less than or equal to 
+// GOV-45 | When ramping is in progress, the time remaining is always less than or equal to 
 //  the ramp duration
 invariant LTVRampingTimeWithinBounds(env e, address collateral) 
-    require_uint48(e.block.timestamp) < ghostLtvTargetTimestamp[collateral]
-        => (ghostLtvTargetTimestamp[collateral] - require_uint48(e.block.timestamp) 
+    to_mathint(e.block.timestamp) < ghostLtvTargetTimestamp[collateral]
+        => (ghostLtvTargetTimestamp[collateral] - to_mathint(e.block.timestamp) 
             < ghostLtvRampDuration[collateral]
             )
     filtered { f -> !HARNESS_METHODS(f) } {
@@ -397,19 +324,3 @@ invariant LTVRampingTimeWithinBounds(env e, address collateral)
         } 
     }
 
-// GOV-46 | Zero timestamp means the LTV is cleared or not set yet
-invariant zeroTimestampIndicatesLTVCleared(env e, address collateral) ghostLtvTargetTimestamp[collateral] == 0
-    => ghostLiquidationLTV[collateral] == 0 && ghostInitialLiquidationLTV[collateral] == 0
-        && ghostLtvRampDuration[collateral] == 0 && ghostBorrowLTV[collateral] == 0
-    filtered { f -> !HARNESS_METHODS(f) } {
-        preserved with (env eFunc) {
-            requireValidTimeStamp(e, eFunc);
-        } 
-    }
-
-// GOV-48 | Config parameters are scaled to `1e4`
-invariant configParamsScaledTo1e4(address collateral) 
-    ghostBorrowLTV[collateral] <= CONFIG_SCALE() && ghostLiquidationLTV[collateral] <= CONFIG_SCALE()
-    && to_mathint(interestFee()) <= CONFIG_SCALE() && to_mathint(maxLiquidationDiscount()) <= CONFIG_SCALE()
-    // && ghostInitialLiquidationLTV[collateral] <= CONFIG_SCALE()
-    filtered { f -> !HARNESS_METHODS(f) }
