@@ -1,5 +1,5 @@
 import "./base/Governance.spec";
-import "./ValidState.spec";
+import "./Common.spec";
 
 function updateVaultFeeConfigCVL(address vault) {
 
@@ -324,3 +324,20 @@ invariant LTVRampingTimeWithinBounds(env e, address collateral)
         } 
     }
 
+// @todo GOV- | Clearing accumulated fees must move the fees to one or two designated fee receiver addresses
+rule feesClearedToReceivers(env e, method f, calldataarg args, address user1, address user2) 
+    filtered { f -> !HARNESS_METHODS(f) } {
+
+    mathint accumulatedFeesPrev = ghostAccumulatedFees;
+    mathint balanceFirstReceiverPrev = ghostUsersDataBalance[user1];
+    mathint balanceSecondReceiverPrev = ghostUsersDataBalance[user2];
+
+    f(e, args);
+    
+    // Accumulated fees were cleared
+    satisfy(ghostAccumulatedFees == 0 && ghostAccumulatedFees != accumulatedFeesPrev
+        => (ghostUsersDataBalance[user1] > balanceFirstReceiverPrev
+            && ghostUsersDataBalance[user2] > balanceSecondReceiverPrev
+        )
+    );
+}

@@ -423,17 +423,24 @@ hook Sstore currentContract.vaultStorage.hookTarget address val {
 // vaultStorage.users[].data
 //
 
-persistent ghost mapping (address => mathint) ghostUsersData {
+persistent ghost mapping (address => uint256) ghostUsersData {
     init_state axiom forall address i. ghostUsersData[i] == 0;
-    axiom forall address i. ghostUsersData[i] >= 0 && ghostUsersData[i] <= max_uint256;
+}
+
+// Balance stored in first 112 bits
+persistent ghost mapping (address => mathint) ghostUsersDataBalance {
+    init_state axiom forall address i. ghostUsersDataBalance[i] == 0;
+    axiom forall address i. ghostUsersDataBalance[i] >= 0 && ghostUsersDataBalance[i] <= max_uint112;
 }
 
 hook Sload BaseHarness.PackedUserSlot val currentContract.vaultStorage.users[KEY address i].data {
-    require(require_uint256(ghostUsersData[i]) == val);
+    require(ghostUsersData[i] == require_uint256(val));
+    require(require_uint112(ghostUsersDataBalance[i]) == require_uint112(val));
 } 
 
 hook Sstore currentContract.vaultStorage.users[KEY address i].data BaseHarness.PackedUserSlot val {
     ghostUsersData[i] = val;
+    ghostUsersDataBalance[i] = require_uint112(val);
 }
 
 //
@@ -586,6 +593,4 @@ hook Sload address val currentContract.vaultStorage.ltvList[INDEX uint256 i] {
 hook Sstore currentContract.vaultStorage.ltvList[INDEX uint256 i] address val {
     ghostLTVList[i] = val;
 }
-
-//////////////////// ASSET ////////////////////////
 

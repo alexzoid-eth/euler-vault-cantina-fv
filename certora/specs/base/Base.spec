@@ -130,11 +130,21 @@ methods {
 }
 
 definition CONFIG_SCALE() returns mathint = 10^4;
+definition MAX_SANE_AMOUNT() returns mathint = max_uint112;
+
+definition INTERNAL_DEBT_PRECISION_SHIFT() returns uint256 = 31;
+definition MAX_SANE_DEBT_AMOUNT() returns mathint = require_uint256(MAX_SANE_AMOUNT()) << INTERNAL_DEBT_PRECISION_SHIFT();
+
+definition OP_MAX_VALUE() returns mathint = 1<<15;
 
 definition CHECKACCOUNT_NONE() returns address = 0;
 definition CHECKACCOUNT_CALLER() returns address = 1;
 
 definition TIMESTAMP_3000_YEAR() returns mathint = 32499081600;
+
+definition OWED_MASK() returns uint256 = 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0000000000000000000000000000;
+definition OWED_OFFSET() returns uint256 = 112;
+definition OWED_FROM_DATA(uint256 data) returns uint256 = (data & OWED_MASK()) >> OWED_OFFSET();
 
 ////////////////// FUNCTIONS //////////////////////
 
