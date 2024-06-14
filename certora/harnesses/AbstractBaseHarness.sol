@@ -18,6 +18,33 @@ abstract contract AbstractBaseHarness is InitializeModule  {
         initialize(msg.sender);
     }
 
+    function LTVFullHarness(address collateral) public view returns (uint16, uint16, uint16, uint48, uint32) {
+        LTVConfig memory ltv = vaultStorage.ltvLookup[collateral];
+        return (
+            ltv.borrowLTV.toUint16(),
+            ltv.liquidationLTV.toUint16(),
+            ltv.initialLiquidationLTV.toUint16(),
+            ltv.targetTimestamp,
+            ltv.rampDuration
+        );
+    }
+
+    function touchHarness() public {
+        initOperation(OP_TOUCH, CHECKACCOUNT_NONE);
+    }
+
+    function getBorrowLTV(address collateral) public view returns (uint16) {
+        return vaultStorage.ltvLookup[collateral].getLTV(false).toUint16();
+    }
+
+    function getLiquidationLTV(address collateral) public view returns (uint16) {
+        return vaultStorage.ltvLookup[collateral].getLTV(true).toUint16();
+    }
+
+    function debtOfExactHarness(address account) public returns (uint256) {
+        return getCurrentOwed(loadVault(), account).toUint();
+    }
+
     function borrowsToAssetsUp(uint256 amount) public returns (uint256) {
         return TypesLib.toAssets(OwedLib.toAssetsUpUint(amount)).toUint();
     }

@@ -1,4 +1,5 @@
 import "./base/Governance.spec";
+import "./common/Funcs.spec";
 
 use builtin rule sanity;
 use builtin rule hasDelegateCalls;
@@ -23,9 +24,6 @@ rule specificFunctionsRequireVaultStatusCheck(env e, method f, calldataarg args)
 
 // GOV-12 | State change functions are protected against reentrancy
 use rule stateChangeFunctionsReentrancyProtected;
-
-// GOV-13 | Functions are not able to receive native tokens
-use rule notAbleReceiveNativeTokens;
 
 // GOV-16 | Anyone can execute view functions
 use rule anyoneCanExecuteViewFunctions;

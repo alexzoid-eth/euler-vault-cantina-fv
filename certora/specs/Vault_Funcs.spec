@@ -1,4 +1,5 @@
 import "./base/Vault.spec";
+import "./common/Funcs.spec";
 
 use builtin rule sanity;
 use builtin rule hasDelegateCalls;
@@ -51,9 +52,6 @@ rule specificFunctionsRequireVaultAccountStatusCheck(env e, method f, calldataar
 
 // VLT-05 | State change functions are protected against reentrancy
 use rule stateChangeFunctionsReentrancyProtected;
-
-// VLT-06 | Functions are not able to receive native tokens
-use rule notAbleReceiveNativeTokens;
 
 // @todo VLT-07 | Anyone can execute view functions
 use rule anyoneCanExecuteViewFunctions;

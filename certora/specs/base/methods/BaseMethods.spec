@@ -1,6 +1,11 @@
 methods {
     
     // AbstractBaseHarness
+    function LTVFullHarness(address collateral) external returns (uint16, uint16, uint16, uint48, uint32) envfree;
+    function touchHarness() external;
+    function getBorrowLTV(address collateral) external returns (uint16);
+    function getLiquidationLTV(address collateral) external returns (uint16);
+    function debtOfExactHarness(address account) external returns (uint256);
     function borrowsToAssetsUp(uint256 amount) external returns (uint256) envfree;
     function vaultCacheOracleConfigured() external returns (bool);
     function isAccountStatusCheckDeferredExt(address account) external returns (bool);
@@ -38,6 +43,9 @@ methods {
 
 definition BASE_HARNESS_METHODS(method f) returns bool = 
     f.selector == sig:initialize(address).selector
+    || f.selector == sig:LTVFullHarness(address).selector
+    || f.selector == sig:debtOfExactHarness(address).selector
+    || f.selector == sig:touchHarness().selector
     || f.selector == sig:borrowsToAssetsUp(uint256).selector
     || f.selector == sig:vaultCacheOracleConfigured().selector
     || f.selector == sig:isAccountStatusCheckDeferredExt(address).selector

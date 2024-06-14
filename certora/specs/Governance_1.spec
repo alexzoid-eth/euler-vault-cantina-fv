@@ -1,5 +1,5 @@
 import "./base/Governance.spec";
-import "./Common.spec";
+import "./common/State.spec";
 
 function updateVaultFeeConfigCVL(address vault) {
 
@@ -14,10 +14,6 @@ function updateVaultFeeConfigCVL(address vault) {
     ghostProtocolFeeReceiver[vault] = newReceiver;
     ghostProtocolFeeShare[vault] = newProtocolFeeShare;
 }
-
-// GOV-78 | The specified LTV is a fraction between 0 and 1 (scaled by 10,000)
-invariant ltvFractionScaled(env e, address collateral) to_mathint(LTVBorrow(e, collateral)) <= CONFIG_SCALE()
-    && to_mathint(LTVLiquidation(e, collateral)) <= CONFIG_SCALE();
 
 // GOV-22 | The fee receiver address can be changed
 rule feeReceiverCanBeTransferred(env e, address newFeeReceiver) {
@@ -199,35 +195,6 @@ rule feesIncreaseOverTime(env e1, env e2, method f1, method f2, calldataarg args
     assert(fees1 != fees2 => fees3 == fees2);
 }
 
-// GOV-30 | Fees are retrieved only for the contract itself from the protocol config contract
-invariant feesRetrievedForCurrentContract(env e) ghostProtocolFeeRequestedVault == currentContract
-    filtered { f -> !HARNESS_METHODS(f) }
-
-// GOV-34 | Ramp duration can be used only when lowering liquidation LTV
-rule rampDurationOnlyWhenLoweringLiquidationLTV(env e, method f, calldataarg args, address collateral)
-    filtered { f -> !HARNESS_METHODS(f) } {
-    
-    uint16 borrowLTV;
-    uint16 liquidationLTV;
-    uint16 initialLiquidationLTV;
-    uint48 targetTimestamp;
-    uint32 rampDuration;
-    borrowLTV, liquidationLTV, initialLiquidationLTV, targetTimestamp, rampDuration = LTVFull(collateral);
-    
-    liquidationLTV = LTVLiquidation(e, collateral);
-
-    f(e, args);
-
-    uint16 _borrowLTV;
-    uint16 _liquidationLTV;
-    uint16 _initialLiquidationLTV;
-    uint48 _targetTimestamp;
-    uint32 _rampDuration;
-    _borrowLTV, _liquidationLTV, _initialLiquidationLTV, _targetTimestamp, _rampDuration = LTVFull(collateral);
-        
-    assert(rampDuration != _rampDuration && _rampDuration != 0 => _liquidationLTV < liquidationLTV);
-}
-
 // GOV-35 | The LTV can be set for a collateral asset, including borrow LTV, liquidation LTV, and ramp duration
 rule setLTVPossibility(env e, calldataarg args, address collateral) {
 
@@ -253,36 +220,7 @@ rule setLTVPossibility(env e, calldataarg args, address collateral) {
     satisfy(targetTimestamp != _targetTimestamp);
     satisfy(rampDuration != _rampDuration);
 }
-
-// GOV-79 | Collateral LTV MUST NOT be removed completely
-rule collateralLTVNotRemoved(env e, method f, calldataarg args, address collateral) 
-    filtered { f -> !HARNESS_METHODS(f) } {
-
-    bool initialized = ghostLtvInitialized[collateral];
-
-    f(e, args);
-
-    assert(initialized => ghostLtvInitialized[collateral]);
-}
     
-// GOV-41 | Initial liquidation LTV is always the previous liquidation LTV or greater 
-//  than liquidation LTV when ramping
-rule initialLiquidationLTVSolvency(env e, method f, calldataarg args, address collateral) 
-    filtered { f -> !HARNESS_METHODS(f) && f.selector != sig:clearLTV(address).selector } {
-
-    require(e.block.timestamp > 0);
-    requireInvariant LTVTimestampFutureRamping(e, collateral);
-    requireInvariant LTVTimestampValid(e, collateral);
-
-    mathint liquidationLTVPrev = ghostLiquidationLTV[collateral];
-
-    f(e, args);
-
-    assert(ghostInitialLiquidationLTV[collateral] == liquidationLTVPrev
-        || ghostInitialLiquidationLTV[collateral] >= ghostLiquidationLTV[collateral]
-    );
-}
-
 // GOV-42 | LTV can be increased or decreased immediately
 rule LTVUpdateImmediate(env e, address collateral, uint16 borrowLTV, uint16 liquidationLTV, uint32 rampDuration) {
 
@@ -297,47 +235,98 @@ rule LTVUpdateImmediate(env e, address collateral, uint16 borrowLTV, uint16 liqu
         );
 }
 
-// GOV-43 | Liquidation LTV is calculated dynamically only when ramping is in progress and always 
-//  between the target liquidation LTV and the initial liquidation LTV
-invariant LTVLiquidationDynamic(env e, address collateral) ghostLtvRampDuration[collateral] > 0
-    ? ghostLiquidationLTV[collateral] == to_mathint(LTVLiquidation(e, collateral))
-    : ghostLiquidationLTV[collateral] <= to_mathint(LTVLiquidation(e, collateral))
-        && to_mathint(LTVLiquidation(e, collateral)) <= ghostInitialLiquidationLTV[collateral]
-    filtered { f -> !HARNESS_METHODS(f) } {
-        preserved with (env eFunc) {
-            requireValidTimeStamp(e, eFunc);
-            requireInvariant LTVTimestampFutureRamping(e, collateral);
-            requireInvariant LTVTimestampValid(e, collateral);
-        }
-    }
-
-// GOV-45 | When ramping is in progress, the time remaining is always less than or equal to 
-//  the ramp duration
-invariant LTVRampingTimeWithinBounds(env e, address collateral) 
-    to_mathint(e.block.timestamp) < ghostLtvTargetTimestamp[collateral]
-        => (ghostLtvTargetTimestamp[collateral] - to_mathint(e.block.timestamp) 
-            < ghostLtvRampDuration[collateral]
-            )
-    filtered { f -> !HARNESS_METHODS(f) } {
-        preserved with (env eFunc) {
-            requireValidTimeStamp(e, eFunc);
-        } 
-    }
-
-// @todo GOV- | Clearing accumulated fees must move the fees to one or two designated fee receiver addresses
-rule feesClearedToReceivers(env e, method f, calldataarg args, address user1, address user2) 
+// Initial liquidation LTV is always the previous liquidation LTV or greater than liquidation LTV when ramping
+rule initialLiquidationLTVSolvency(env e, method f, calldataarg args, address collateral) 
     filtered { f -> !HARNESS_METHODS(f) } {
 
-    mathint accumulatedFeesPrev = ghostAccumulatedFees;
-    mathint balanceFirstReceiverPrev = ghostUsersDataBalance[user1];
-    mathint balanceSecondReceiverPrev = ghostUsersDataBalance[user2];
+    require(e.block.timestamp > 0);
+    requireInvariant LTVTimestampFutureRamping(e, collateral);
+    requireInvariant LTVTimestampValid(e, collateral);
+
+    mathint liquidationLTVPrev = ghostLiquidationLTV[collateral];
 
     f(e, args);
-    
-    // Accumulated fees were cleared
-    satisfy(ghostAccumulatedFees == 0 && ghostAccumulatedFees != accumulatedFeesPrev
-        => (ghostUsersDataBalance[user1] > balanceFirstReceiverPrev
-            && ghostUsersDataBalance[user2] > balanceSecondReceiverPrev
-        )
+
+    assert(ghostLtvTargetTimestamp[collateral] != 0
+        => ghostInitialLiquidationLTV[collateral] == liquidationLTVPrev
+            || ghostInitialLiquidationLTV[collateral] >= ghostLiquidationLTV[collateral]
     );
+}
+
+// GOV-01 | Only the governor can invoke methods that modify the configuration of the vault
+rule governorOnlyMethods(env e, method f, calldataarg args) 
+    filtered { f -> GOVERNOR_ONLY_METHODS(f) } {
+
+    // Execute checks at the same state snapshot as external call can return different results
+    storage init = lastStorage;
+    bool governor = isSenderGovernor(e) at init;
+
+    f@withrevert(e, args) at init;
+    bool reverted = lastReverted;
+
+    // governorOnly methods should revert when sender is not a governor
+    assert(!governor => reverted);
+}
+
+// GOV73 | Non-governor methods MUST be accessible to any callers
+rule governorOnlyNotAffectOtherMethods(env e, method f, calldataarg args) 
+    filtered { f -> !GOVERNOR_ONLY_METHODS(f) && !HARNESS_METHODS(f) } {
+
+    // In this case EVCAuthenticateGovernor() in governorOnly() modifier returns msg.sender
+    require(!isSenderGovernor(e));
+
+    f@withrevert(e, args);
+    bool reverted = lastReverted;
+
+    // Other methods can be executed when sender is not a governor
+    satisfy(!reverted);
+}
+
+// GOV-02 | Only one governor can exist at one time
+rule onlyOneGovernorExists(env e1, env e2, method f, calldataarg args)
+    filtered { f -> GOVERNOR_ONLY_METHODS(f) } {
+
+    // In this case EVCAuthenticateGovernor() in governorOnly() modifier returns msg.sender
+    require(e1.msg.sender != EVC());
+    require(e2.msg.sender != EVC());
+
+    // First user is governor admin, second user is another
+    require(e1.msg.sender == governorAdmin());
+    require(e1.msg.sender != e2.msg.sender);
+
+    storage init = lastStorage;
+
+    f@withrevert(e1, args) at init;
+    bool revertedGovernor = lastReverted;
+
+    f@withrevert(e2, args) at init;
+    bool reverted = lastReverted;
+
+    // If the call with first sender was successful, than the call with another sender shound fail
+    assert(!revertedGovernor => reverted);
+} 
+
+// GOV-20 | Governor's ownership can be transferred
+rule ownershipCanBeTransferred(env e, address newGovernorAdmin) {
+
+    address before = governorAdmin();
+    
+    setGovernorAdmin(e, newGovernorAdmin);
+
+    address after = governorAdmin();
+
+    assert(after == newGovernorAdmin);
+}
+
+// GOV-21 | The ownership could be revoked by setting the governor to zero address
+rule ownershipCanBeRevoked(env e, calldataarg args) {
+
+    address before = governorAdmin();
+    require(before != 0);
+
+    setGovernorAdmin(e, args);
+
+    address after = governorAdmin();
+
+    satisfy(after == 0);
 }

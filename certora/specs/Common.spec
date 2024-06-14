@@ -1,135 +1,241 @@
 import "./base/Base.spec";
+import "./common/State.spec";
+import "./common/Funcs.spec";
 
-function requireCommonCVL() {
+// Valid state invariants
+use invariant vaultNotDeinitialized;
+use invariant uninitializedSnapshotReset;
+use invariant snapshotStampAlwaysOne;
+use invariant cashNotLessThanAssets;
+use invariant supplyBorrowCapsLimits;
+use invariant hooksLimits;
+use invariant totalSharesBorrowsFeeLimits;
+use invariant validateNotUseZeroAddress;
+use invariant noSelfCollateralization;
+use invariant uniqueLTVEntries;
+use invariant lastInterestAccumulatorNotInFuture;
+use invariant timestampSetWhenPositiveAccumulatedFees;
+use invariant borrowLTVLowerOrEqualLiquidationLTV;
+use invariant initializedLTVWhenSet;
+use invariant zeroTimestampInitializedSolvency;
+use invariant LTVTimestampValid;
+use invariant LTVTimestampFutureRamping;
+use invariant initializedLTVInCollateralList;
+use invariant zeroTimestampIndicatesLTVCleared;
+use invariant configParamsScaledTo1e4;
+use invariant ltvFractionScaled;
+use invariant LTVLiquidationDynamic;
+use invariant LTVRampingTimeWithinBounds;
+
+// Functions are not able to receive native tokens
+use rule notAbleReceiveNativeTokens;
+
+definition HARNESS_METHODS(method f) returns bool = BASE_HARNESS_METHODS(f);
+
+// @todo Snapshot is disabled if both caps are disabled (at low-level set to 0, but resolved to max_uint256)
+invariant snapshotDisabledWithBothCapsDisabled() 
+    ghostSupplyCap == 0 && ghostBorrowCap == 0 => ghostSnapshotInitialized == false
+    filtered { f -> !HARNESS_METHODS(f) }
+
+
+// Snapshot MUST NOT be used when it is not initialized
+rule snapshotUsedWhenInitialized(env e, method f, calldataarg args) 
+    filtered { f -> !HARNESS_METHODS(f) } {
+
+    mathint snapshotCashPrev = ghostSnapshotCash;
+    mathint snapshotBorrows = ghostSnapshotBorrows;
+
+    f(e, args);
+
+    assert((ghostSnapshotCash != 0 && ghostSnapshotBorrows != 0)
+        && (snapshotCashPrev != ghostSnapshotCash || snapshotBorrows != ghostSnapshotBorrows) 
+        => ghostSnapshotInitialized == true
+        );
 }
 
-// VS- | Vault MUST NOT be deinitialized
-invariant vaultNotDeinitialized() 
-    ghostInitialized == true;
+// Snapshot cash MUST set from storage cash or reset
+rule snapshotCashSetFromStorage(env e, method f, calldataarg args) 
+    filtered { f -> !HARNESS_METHODS(f) } {
 
-// VS- | Uninitialized snapshot MUST be reset
-invariant uninitializedSnapshotReset() 
-    ghostSnapshotInitialized == false
-        => ghostSnapshotCash == 0 && ghostSnapshotBorrows == 0;
+    requireInvariant uninitializedSnapshotReset;
+    requireInvariant snapshotDisabledWithBothCapsDisabled;
 
-// VS- | Snapshot stamp MUST be always equal to 1
-invariant snapshotStampAlwaysOne() ghostSnapshotStamp == 1;
+    bool initialized = ghostSnapshotInitialized;
+    mathint cashPrev = ghostCash;
 
-// VS- | last interest accumulator timestamp MUST NOT be in the future
-invariant lastInterestAccumulatorNotInFuture(env e) 
-    // Assume it is zero after constructor as it is not possible to set current timestamp as init_axiom state 
-    ghostLastInterestAccumulatorUpdate <= to_mathint(e.block.timestamp) {
-        preserved with (env eFunc) {
-            requireValidTimeStamp(e, eFunc);
-        } 
-    }
+    f(e, args);
 
-// VS- | Last interest accumulator timestamp set when positive accumulated fees
-invariant timestampSetWhenPositiveAccumulatedFees(env e) 
-    ghostAccumulatedFees != 0 => ghostLastInterestAccumulatorUpdate != 0 {
-        preserved with (env eFunc) {
-            requireValidTimeStamp(e, eFunc);
-        } 
-    }
-
-// VS- | Cash amount MUST NOT be less than the ERC20 assets stored in the current contract
-invariant cashNotLessThanAssets() 
-    ghostErc20Balances[currentContract] >= ghostCash;
-
-// VS- | Max supply and borrow caps limitations
-invariant supplyBorrowCapsLimits() 
-    to_mathint(storage_supplyCap()) <= 2 * MAX_SANE_AMOUNT() || storage_supplyCap() == max_uint256
-    && to_mathint(storage_borrowCap()) <= MAX_SANE_AMOUNT() || storage_borrowCap() == max_uint256;
-
-// VS- | Hooks limitations
-invariant hooksLimits() 
-    ghostHookedOps < OP_MAX_VALUE();
-
-// VS- | Total shares, total borrows, accumulated fees limitations
-invariant totalSharesBorrowsFeeLimits() 
-    ghostTotalShares < MAX_SANE_AMOUNT() 
-    && ghostTotalBorrows < MAX_SANE_DEBT_AMOUNT()
-    && ghostAccumulatedFees < MAX_SANE_AMOUNT();
-
-// VS- | Shares cannot be transferred to the zero address
-invariant validateNotUseZeroAddress() ghostUsersDataBalance[0] == 0
-    // Use selectors instead of preserved block, because specification tested with different 
-    //  contracts and there is no other need to put them into sceene 
-    filtered { 
-        f -> f.selector != 0xc1342574   // Exclude liquidate() as `violator` can be set to zero
-        && f.selector != 0xaebde56b     // Exclude pullDebt() as `from` can be set to zero
-    }
-
-//
-// LTV
-//
-
-// VS- | Self-collateralization is not allowed
-invariant noSelfCollateralization() 
-    !ghostLtvInitialized[currentContract] == false 
-    && ghostBorrowLTV[currentContract] == 0 
-    && ghostLiquidationLTV[currentContract] == 0;
-
-// VS- | The borrow LTV must be lower than or equal to the liquidation LTV
-invariant borrowLTVLowerOrEqualLiquidationLTV(address collateral) 
-    ghostBorrowLTV[collateral] <= ghostLiquidationLTV[collateral];
-
-// VS- | The LTV is always initialized when set
-invariant initializedLTVWhenSet(address collateral) 
-    ghostBorrowLTV[currentContract] != 0 || ghostLiquidationLTV[collateral] != 0 
-        => ghostLtvInitialized[collateral];
-
-// VS- | LTV with zero timestamp should not be initialized
-invariant zeroTimestampInitializedSolvency(env e, address collateral) 
-    ghostLtvTargetTimestamp[collateral] == 0 
-        => (ghostBorrowLTV[collateral] == 0 && ghostLiquidationLTV[collateral] == 0) {
-    preserved with (env eFunc) {
-        requireValidTimeStamp(e, eFunc);
-    } 
+    // Cash in snapshot was changed
+    assert(ghostSnapshotInitialized && initialized != ghostSnapshotInitialized
+        => (ghostCash == cashPrev
+            // Cash in storage was NOT changed in this transaction
+            ? ghostSnapshotCash == ghostCash
+            // Cash in storage was changed after been saved in cache
+            : ghostSnapshotCash == cashPrev
+            )
+    );
 }
 
-// VS- | LTV's timestamp is always less than or equal to the current timestamp
-invariant LTVTimestampValid(env e, address collateral) 
-    ghostLtvTargetTimestamp[collateral] == 0 || ghostLtvTargetTimestamp[collateral] >= to_mathint(e.block.timestamp) {
-        preserved with (env eFunc) {
-            requireValidTimeStamp(e, eFunc);
-        } 
-    }
+// Clearing accumulated fees must move the fees to one or two designated fee receiver addresses
+rule feesClearedToReceivers(env e, method f, calldataarg args, address user1, address user2) 
+    filtered { f -> !HARNESS_METHODS(f) } {
 
-// VS- | LTV's timestamp MUST be in the future only when ramping set
-invariant LTVTimestampFutureRamping(env e, address collateral)
-    ghostLtvTargetTimestamp[collateral] > to_mathint(e.block.timestamp) 
-        => (ghostLtvRampDuration[collateral] >= ghostLtvTargetTimestamp[collateral] - to_mathint(e.block.timestamp)) {
-        preserved with (env eFunc) {
-            requireValidTimeStamp(e, eFunc);
-        } 
-    }
+    require(user1 != user2);
 
-// VS- | Initialized LTV exists in collaterals list
-invariant initializedLTVInCollateralList(address collateral) 
-    ghostLtvInitialized[collateral] <=> collateralExists(collateral) {
-        preserved {
-            // It should not be possible to overflow uint256 list
-            require(ltvListLength() < max_uint64);
-        }
-    }
+    mathint accumulatedFeesPrev = ghostAccumulatedFees;
+    mathint balanceFirstReceiverPrev = ghostUsersDataBalance[user1];
+    mathint balanceSecondReceiverPrev = ghostUsersDataBalance[user2];
 
-// VS- | Zero timestamp means the LTV is cleared or not set yet
-invariant zeroTimestampIndicatesLTVCleared(env e, address collateral) 
-    ghostLtvTargetTimestamp[collateral] == 0
-        => ghostLiquidationLTV[collateral] == 0 && ghostInitialLiquidationLTV[collateral] == 0
-            && ghostLtvRampDuration[collateral] == 0 && ghostBorrowLTV[collateral] == 0 {
-        preserved with (env eFunc) {
-            requireValidTimeStamp(e, eFunc);
-        } 
-    }
+    f(e, args);
+    
+    // Accumulated fees were cleared
+    satisfy(ghostAccumulatedFees == 0 && ghostAccumulatedFees != accumulatedFeesPrev
+        => (ghostUsersDataBalance[user1] > balanceFirstReceiverPrev
+            && ghostUsersDataBalance[user2] > balanceSecondReceiverPrev
+        )
+    );
+}
 
-// VS- | Config parameters are scaled to `1e4`
-invariant configParamsScaledTo1e4(address collateral) 
-    ghostBorrowLTV[collateral] <= CONFIG_SCALE() && ghostLiquidationLTV[collateral] <= CONFIG_SCALE()
-    && ghostInterestFee <= CONFIG_SCALE() && ghostMaxLiquidationDiscount <= CONFIG_SCALE();
-    // && ghostInitialLiquidationLTV[collateral] <= CONFIG_SCALE()
+// Accumulated fees must result in an increase in the total shares of the vault
+rule accumulatedFeesIncreaseTotalShares(env e) {
 
-// VS- | All collateral entries in the vault storage LTV list MUST be unique
-invariant uniqueLTVEntries() 
-    forall mathint i. forall mathint j. ghostLTVList[i] != ghostLTVList[j];
+    mathint accumulatedFeesPrev = ghostAccumulatedFees;
+    mathint totalSharesPrev = ghostTotalShares;
+
+    touchHarness(e);
+    
+    assert(ghostAccumulatedFees >= accumulatedFeesPrev 
+        => (ghostTotalShares - totalSharesPrev == ghostAccumulatedFees - accumulatedFeesPrev)
+    );
+}
+
+// Change accumulated fees accrued MUST set last interest accumulator timestamp
+rule interestFeesAccruedSetTimestamp(env e, method f, calldataarg args)
+    filtered { f -> !HARNESS_METHODS(f) } {
+    
+    requireInvariant lastInterestAccumulatorNotInFuture(e);
+
+    mathint accumulatedFeesPrev = ghostAccumulatedFees;
+
+    f(e, args);
+    
+    assert(accumulatedFeesPrev != ghostAccumulatedFees
+        => ghostLastInterestAccumulatorUpdate == to_mathint(e.block.timestamp)
+    );
+}
+
+// @todo Accumulated fees and interest accumulator are updated only when time has passed since the last update
+rule feesAndInterestNotUpdateNoTimePassed(env e, method f, calldataarg args)
+    filtered { f -> !HARNESS_METHODS(f) } {
+
+    require(e.block.timestamp > 0);
+
+    mathint interestAccumulatorPrev = ghostInterestAccumulator;
+    mathint accumulatedFeesPrev = ghostAccumulatedFees;
+
+    f(e, args);
+
+    assert(ghostLastInterestAccumulatorUpdate == to_mathint(e.block.timestamp) 
+        => (interestAccumulatorPrev == ghostInterestAccumulator && accumulatedFeesPrev == ghostAccumulatedFees)
+    );
+}
+
+// The vault's cash changes without assets transfer only when surplus assets available
+rule cashChangesSkim(env e, method f, calldataarg args)
+    filtered { f -> !HARNESS_METHODS(f) } {
+
+    requireInvariant cashNotLessThanAssets;
+
+    mathint cashPrev = ghostCash;
+    mathint erc20BalancePrev = ghostErc20Balances[currentContract];
+
+    f(e, args);
+
+    // Cashed changes without assets transfer
+    assert(ghostCash > cashPrev && ghostErc20Balances[currentContract] == erc20BalancePrev
+            // Only when was a surplus of assets
+        => (erc20BalancePrev > cashPrev
+            // Cash MUST NOT increase more than was available surplus
+            && erc20BalancePrev - cashPrev >= ghostCash - cashPrev
+        )
+    );
+}
+
+// Transferring assets from the vault MUST decrease the available cash balance
+rule transferOutDecreaseCash(env e, method f, calldataarg args)
+    filtered { f -> !HARNESS_METHODS(f) } {
+
+    requireInvariant cashNotLessThanAssets;
+
+    mathint cashPrev = ghostCash;
+    mathint erc20BalancePrev = ghostErc20Balances[currentContract];
+
+    f(e, args);
+
+    assert(erc20BalancePrev > ghostErc20Balances[currentContract]
+        => (erc20BalancePrev - ghostErc20Balances[currentContract] == cashPrev - ghostCash)
+    );
+}
+
+// Changes in the cash balance must correspond to changes in the total shares
+rule cashChangesAffectTotalShares(env e, method f, calldataarg args) 
+    filtered { f -> !HARNESS_METHODS(f) } {
+
+    mathint cashPrev = ghostCash;
+    mathint totalSharesPrev = ghostTotalShares;
+
+    f(e, args);
+
+    assert(cashPrev != ghostCash => totalSharesPrev != ghostTotalShares);
+}
+
+// Accumulated fees must not decrease unless they are being reset to zero
+rule accumulatedFeesNonDecreasing(env e, method f, calldataarg args)
+    filtered { f -> !HARNESS_METHODS(f) } {
+
+    mathint accumulatedFeesPrev = ghostAccumulatedFees;
+
+    f(e, args);
+    
+    assert(ghostAccumulatedFees == 0 || ghostAccumulatedFees >= accumulatedFeesPrev);
+}
+
+// Fees are retrieved only for the contract itself from the protocol config contract
+invariant feesRetrievedForCurrentContract(env e) ghostProtocolFeeRequestedVault == currentContract
+    filtered { f -> !HARNESS_METHODS(f) }
+
+// Ramp duration can be used only when lowering liquidation LTV
+rule rampDurationOnlyWhenLoweringLiquidationLTV(env e, method f, calldataarg args, address collateral)
+    filtered { f -> !HARNESS_METHODS(f) } {
+    
+    uint16 borrowLTV;
+    uint16 liquidationLTV;
+    uint16 initialLiquidationLTV;
+    uint48 targetTimestamp;
+    uint32 rampDuration;
+    borrowLTV, liquidationLTV, initialLiquidationLTV, targetTimestamp, rampDuration = LTVFullHarness(collateral);
+    
+    liquidationLTV = getLiquidationLTV(e, collateral);
+
+    f(e, args);
+
+    uint16 _borrowLTV;
+    uint16 _liquidationLTV;
+    uint16 _initialLiquidationLTV;
+    uint48 _targetTimestamp;
+    uint32 _rampDuration;
+    _borrowLTV, _liquidationLTV, _initialLiquidationLTV, _targetTimestamp, _rampDuration = LTVFullHarness(collateral);
+        
+    assert(rampDuration != _rampDuration && _rampDuration != 0 => _liquidationLTV < liquidationLTV);
+}
+
+// Collateral LTV MUST NOT be removed completely
+rule collateralLTVNotRemoved(env e, method f, calldataarg args, address collateral) 
+    filtered { f -> !HARNESS_METHODS(f) } {
+
+    bool initialized = ghostLtvInitialized[collateral];
+
+    f(e, args);
+
+    assert(initialized => ghostLtvInitialized[collateral]);
+}
