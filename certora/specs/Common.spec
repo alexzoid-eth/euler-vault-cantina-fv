@@ -27,12 +27,22 @@ use invariant ltvFractionScaled;
 use invariant ltvLiquidationDynamic;
 use invariant ltvRampingTimeWithinBounds;
 
-// Functions are not able to receive native tokens
-use rule notAbleReceiveNativeTokens;
-
 definition HARNESS_METHODS(method f) returns bool = BASE_HARNESS_METHODS(f);
 
-// Snapshot MUST NOT be used when it is not initialized
+// COM-01 | Accumulated fees must result in an increase in the total shares of the vault
+rule accumulatedFeesIncreaseTotalShares(env e) {
+
+    mathint accumulatedFeesPrev = ghostAccumulatedFees;
+    mathint totalSharesPrev = ghostTotalShares;
+
+    touchHarness(e);
+    
+    assert(ghostAccumulatedFees >= accumulatedFeesPrev 
+        => (ghostTotalShares - totalSharesPrev == ghostAccumulatedFees - accumulatedFeesPrev)
+    );
+}
+
+// COM-02 | Snapshot MUST NOT be used when it is not initialized
 rule snapshotUsedWhenInitialized(env e, method f, calldataarg args) 
     filtered { f -> !HARNESS_METHODS(f) } {
 
@@ -47,7 +57,7 @@ rule snapshotUsedWhenInitialized(env e, method f, calldataarg args)
         );
 }
 
-// Snapshot cash MUST set from storage cash or reset
+// COM-03 | Snapshot cash MUST set from storage cash or reset
 rule snapshotCashSetFromStorage(env e, method f, calldataarg args) 
     filtered { f -> !HARNESS_METHODS(f) } {
 
@@ -69,7 +79,7 @@ rule snapshotCashSetFromStorage(env e, method f, calldataarg args)
     );
 }
 
-// Clearing accumulated fees must move the fees to one or two designated fee receiver addresses
+// COM-04 | Clearing accumulated fees must move the fees to one or two designated fee receiver addresses
 rule feesClearedToReceivers(env e, method f, calldataarg args, address user1, address user2) 
     filtered { f -> !HARNESS_METHODS(f) } {
 
@@ -89,20 +99,10 @@ rule feesClearedToReceivers(env e, method f, calldataarg args, address user1, ad
     );
 }
 
-// Accumulated fees must result in an increase in the total shares of the vault
-rule accumulatedFeesIncreaseTotalShares(env e) {
+// COM-05 | Functions are not able to receive native tokens
+use rule notAbleReceiveNativeTokens;
 
-    mathint accumulatedFeesPrev = ghostAccumulatedFees;
-    mathint totalSharesPrev = ghostTotalShares;
-
-    touchHarness(e);
-    
-    assert(ghostAccumulatedFees >= accumulatedFeesPrev 
-        => (ghostTotalShares - totalSharesPrev == ghostAccumulatedFees - accumulatedFeesPrev)
-    );
-}
-
-// Change accumulated fees accrued MUST set last interest accumulator timestamp
+// COM-06 | Change accumulated fees accrued MUST set last interest accumulator timestamp
 rule interestFeesAccruedSetTimestamp(env e, method f, calldataarg args)
     filtered { f -> !HARNESS_METHODS(f) } {
     
@@ -117,7 +117,7 @@ rule interestFeesAccruedSetTimestamp(env e, method f, calldataarg args)
     );
 }
 
-// Accumulated fees and interest accumulator are updated only when lastInterestAccumulatorUpdate changed
+// COM-07 | Accumulated fees and interest accumulator are updated only when lastInterestAccumulatorUpdate changed
 rule feesAndInterestNotUpdateNoAccumulatorUpdate(env e, method f, calldataarg args)
     filtered { f -> !HARNESS_METHODS(f) } {
 
@@ -132,7 +132,7 @@ rule feesAndInterestNotUpdateNoAccumulatorUpdate(env e, method f, calldataarg ar
     );
 }
 
-// The vault's cash changes without assets transfer only when surplus assets available
+// COM-08 | The vault's cash changes without assets transfer only when surplus assets available
 rule cashChangesSkim(env e, method f, calldataarg args)
     filtered { f -> !HARNESS_METHODS(f) } {
 
@@ -153,7 +153,7 @@ rule cashChangesSkim(env e, method f, calldataarg args)
     );
 }
 
-// Transferring assets from the vault MUST decrease the available cash balance
+// COM-09 | Transferring assets from the vault MUST decrease the available cash balance
 rule transferOutDecreaseCash(env e, method f, calldataarg args)
     filtered { f -> !HARNESS_METHODS(f) } {
 
@@ -169,7 +169,7 @@ rule transferOutDecreaseCash(env e, method f, calldataarg args)
     );
 }
 
-// Changes in the cash balance must correspond to changes in the total shares
+// COM-10 | Changes in the cash balance must correspond to changes in the total shares
 rule cashChangesAffectTotalShares(env e, method f, calldataarg args) 
     filtered { f -> !HARNESS_METHODS(f) } {
 
@@ -181,7 +181,7 @@ rule cashChangesAffectTotalShares(env e, method f, calldataarg args)
     assert(cashPrev != ghostCash => totalSharesPrev != ghostTotalShares);
 }
 
-// Accumulated fees must not decrease unless they are being reset to zero
+// COM-11 | Accumulated fees must not decrease unless they are being reset to zero
 rule accumulatedFeesNonDecreasing(env e, method f, calldataarg args)
     filtered { f -> !HARNESS_METHODS(f) } {
 
@@ -192,11 +192,11 @@ rule accumulatedFeesNonDecreasing(env e, method f, calldataarg args)
     assert(ghostAccumulatedFees == 0 || ghostAccumulatedFees >= accumulatedFeesPrev);
 }
 
-// Fees are retrieved only for the contract itself from the protocol config contract
+// COM-12 | Fees are retrieved only for the contract itself from the protocol config contract
 invariant feesRetrievedForCurrentContract(env e) ghostProtocolFeeRequestedVault == currentContract
     filtered { f -> !HARNESS_METHODS(f) }
 
-// Ramp duration can be used only when lowering liquidation LTV
+// COM-13 | Ramp duration can be used only when lowering liquidation LTV
 rule rampDurationOnlyWhenLoweringLiquidationLTV(env e, method f, calldataarg args, address collateral)
     filtered { f -> !HARNESS_METHODS(f) } {
     
@@ -221,7 +221,7 @@ rule rampDurationOnlyWhenLoweringLiquidationLTV(env e, method f, calldataarg arg
     assert(rampDuration != _rampDuration && _rampDuration != 0 => _liquidationLTV < liquidationLTV);
 }
 
-// Collateral LTV MUST NOT be removed completely
+// COM-14 | Collateral LTV MUST NOT be removed completely
 rule collateralLTVNotRemoved(env e, method f, calldataarg args, address collateral) 
     filtered { f -> !HARNESS_METHODS(f) } {
 

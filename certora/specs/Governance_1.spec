@@ -15,7 +15,71 @@ function updateVaultFeeConfigCVL(address vault) {
     ghostProtocolFeeShare[vault] = newProtocolFeeShare;
 }
 
-// GOV-22 | The fee receiver address can be changed
+// GV1-01 | Only the governor can invoke methods that modify the configuration of the vault
+rule governorOnlyMethods(env e, method f, calldataarg args) 
+    filtered { f -> GOVERNOR_ONLY_METHODS(f) } {
+
+    // Execute checks at the same state snapshot as external call can return different results
+    storage init = lastStorage;
+    bool governor = isSenderGovernor(e) at init;
+
+    f@withrevert(e, args) at init;
+    bool reverted = lastReverted;
+
+    // governorOnly methods should revert when sender is not a governor
+    assert(!governor => reverted);
+}
+
+// GV1-02 | Only one governor can exist at one time
+rule onlyOneGovernorExists(env e1, env e2, method f, calldataarg args)
+    filtered { f -> GOVERNOR_ONLY_METHODS(f) } {
+
+    // In this case EVCAuthenticateGovernor() in governorOnly() modifier returns msg.sender
+    require(e1.msg.sender != EVC());
+    require(e2.msg.sender != EVC());
+
+    // First user is governor admin, second user is another
+    require(e1.msg.sender == governorAdmin());
+    require(e1.msg.sender != e2.msg.sender);
+
+    storage init = lastStorage;
+
+    f@withrevert(e1, args) at init;
+    bool revertedGovernor = lastReverted;
+
+    f@withrevert(e2, args) at init;
+    bool reverted = lastReverted;
+
+    // If the call with first sender was successful, than the call with another sender shound fail
+    assert(!revertedGovernor => reverted);
+} 
+
+// GV1-03 | Governor's ownership can be transferred
+rule ownershipCanBeTransferred(env e, address newGovernorAdmin) {
+
+    address before = governorAdmin();
+    
+    setGovernorAdmin(e, newGovernorAdmin);
+
+    address after = governorAdmin();
+
+    assert(after == newGovernorAdmin);
+}
+
+// GV1-04 | The ownership could be revoked by setting the governor to zero address
+rule ownershipCanBeRevoked(env e, calldataarg args) {
+
+    address before = governorAdmin();
+    require(before != 0);
+
+    setGovernorAdmin(e, args);
+
+    address after = governorAdmin();
+
+    satisfy(after == 0);
+}
+
+// GV1-05 | The fee receiver address can be changed
 rule feeReceiverCanBeTransferred(env e, address newFeeReceiver) {
 
     address before = feeReceiver();
@@ -27,7 +91,7 @@ rule feeReceiverCanBeTransferred(env e, address newFeeReceiver) {
     assert(after == newFeeReceiver);
 }
 
-// GOV-23 | While distributing fees, external protocol config contract is used
+// GV1-06 | While distributing fees, external protocol config contract is used
 rule protocolFeeConfigCalled(env e) {
 
     require(!ghostProtocolFeeConfigCalled);
@@ -37,8 +101,7 @@ rule protocolFeeConfigCalled(env e) {
     satisfy(ghostProtocolFeeConfigCalled);
 }
 
-// GOV-75 | Update the protocol (Euler DAO's) receiver and fee amount for the current 
-//  contract MUST affect the state
+// GV1-07 | Update the protocol (Euler DAO's) receiver and fee amount for the current contract MUST affect the state
 rule protocolFeeParamsAffectState(env e) {
 
     // Disable hook and balance forwarder
@@ -69,8 +132,7 @@ rule protocolFeeParamsAffectState(env e) {
     assert(after1[currentContract] != after2[currentContract]);
 }
 
-// GOV-76 | Update the protocol (Euler DAO's) receiver and fee amount for another 
-//  contract MUST NOT affect the state
+// GV1-08 | Update the protocol (Euler DAO's) receiver and fee amount for another contract MUST NOT affect the state
 rule protocolFeeParamsOfAnotherVaultNotAffectState(env e) {
 
     storage init = lastStorage;
@@ -90,7 +152,7 @@ rule protocolFeeParamsOfAnotherVaultNotAffectState(env e) {
     assert(after1[currentContract] == after2[currentContract]);
 }
 
-// GOV-77 | The governor fee receiver can be disabled
+// GV1-09 | The governor fee receiver can be disabled
 rule governorFeeReceiverCanBeDisabled(env e, address newFeeReceiver) {
 
     address before = feeReceiver();
@@ -101,7 +163,7 @@ rule governorFeeReceiverCanBeDisabled(env e, address newFeeReceiver) {
     satisfy(feeReceiver() == 0);
 }
 
-// GOV-24 | If the governor receiver was not set, the protocol gets all fees
+// GV1-10 | If the governor receiver was not set, the protocol gets all fees
 rule protocolGetsAllFeesIfGovernorReceiverNotSet(env e) {
 
     address governor = feeReceiver();
@@ -122,7 +184,7 @@ rule protocolGetsAllFeesIfGovernorReceiverNotSet(env e) {
     satisfy(protocolBalanceBefore < protocolBalanceAfter);
 }
 
-// GOV-25 | Protocol's fee share cannot be more than the max protocol fee share (50%)
+// GV1-11 | Protocol's fee share cannot be more than the max protocol fee share (50%)
 rule maxProtocolFeeShareEnforced(env e) {
 
     address governor = feeReceiver();
@@ -140,7 +202,7 @@ rule maxProtocolFeeShareEnforced(env e) {
     assert(governor != 0 => governorGotShares >= protocolGotShares - 1);
 }
 
-// GOV-26 | While distributing fees, total shares MUST not changed and accumulated fees are cleared
+// GV1-12 | While distributing fees, total shares MUST not change and accumulated fees are cleared
 rule feesDistributionClearAccumulatedFeesNotAffectTotalShares(env e) {
 
     mathint accumulatedFeesBefore = accumulatedFees(e);
@@ -155,7 +217,7 @@ rule feesDistributionClearAccumulatedFeesNotAffectTotalShares(env e) {
     assert(totalSharesAfter == totalSharesBefore);
 }
 
-// GOV-27 | While distributing fees, shares are transferred to governor and protocol fee receiver addresses
+// GV1-13 | While distributing fees, shares are transferred to governor and protocol fee receiver addresses
 rule governorAndProtocolReceiveFees(env e) {
 
     address governor = feeReceiver();
@@ -173,8 +235,10 @@ rule governorAndProtocolReceiveFees(env e) {
     satisfy(protocolBalanceAfter > protocolBalanceBefore);     
 }
 
-// GOV-29 | Accumulated fees only increase when some time has passed
-rule feesIncreaseOverTime(env e1, env e2, method f1, method f2, calldataarg args1, calldataarg args2) 
+// GV1-14 | Accumulated fees only increase when some time has passed
+rule fees
+
+IncreaseOverTime(env e1, env e2, method f1, method f2, calldataarg args1, calldataarg args2) 
     // Exclude view functions and `convertFees()` to reduce complexity
     filtered { f1 -> !HARNESS_METHODS(f1) && !f1.isView && f1.selector != sig:convertFees().selector, 
         f2 -> !HARNESS_METHODS(f2) && !f2.isView && f2.selector != sig:convertFees().selector } {
@@ -195,7 +259,7 @@ rule feesIncreaseOverTime(env e1, env e2, method f1, method f2, calldataarg args
     assert(fees1 != fees2 => fees3 == fees2);
 }
 
-// GOV-35 | The LTV can be set for a collateral asset, including borrow LTV, liquidation LTV, and ramp duration
+// GV1-15 | The LTV can be set for a collateral asset, including borrow LTV, liquidation LTV, and ramp duration
 rule setLTVPossibility(env e, calldataarg args, address collateral) {
 
     uint16 borrowLTV;
@@ -221,7 +285,7 @@ rule setLTVPossibility(env e, calldataarg args, address collateral) {
     satisfy(rampDuration != _rampDuration);
 }
     
-// GOV-42 | LTV can be increased or decreased immediately
+// GV1-16 | LTV can be increased or decreased immediately
 rule LTVUpdateImmediate(env e, address collateral, uint16 borrowLTV, uint16 liquidationLTV, uint32 rampDuration) {
 
     uint16 _liquidationLTV = LTVLiquidation(e, collateral);
@@ -235,7 +299,7 @@ rule LTVUpdateImmediate(env e, address collateral, uint16 borrowLTV, uint16 liqu
         );
 }
 
-// Initial liquidation LTV is always the previous liquidation LTV or greater than liquidation LTV when ramping
+// GV1-17 | Initial liquidation LTV is always the previous liquidation LTV or greater than liquidation LTV when ramping
 rule initialLiquidationLTVSolvency(env e, method f, calldataarg args, address collateral) 
     filtered { f -> !HARNESS_METHODS(f) } {
 
@@ -253,22 +317,7 @@ rule initialLiquidationLTVSolvency(env e, method f, calldataarg args, address co
     );
 }
 
-// GOV-01 | Only the governor can invoke methods that modify the configuration of the vault
-rule governorOnlyMethods(env e, method f, calldataarg args) 
-    filtered { f -> GOVERNOR_ONLY_METHODS(f) } {
-
-    // Execute checks at the same state snapshot as external call can return different results
-    storage init = lastStorage;
-    bool governor = isSenderGovernor(e) at init;
-
-    f@withrevert(e, args) at init;
-    bool reverted = lastReverted;
-
-    // governorOnly methods should revert when sender is not a governor
-    assert(!governor => reverted);
-}
-
-// GOV73 | Non-governor methods MUST be accessible to any callers
+// GV1-18 | Non-governor methods MUST be accessible to any callers
 rule governorOnlyNotAffectOtherMethods(env e, method f, calldataarg args) 
     filtered { f -> !GOVERNOR_ONLY_METHODS(f) && !HARNESS_METHODS(f) } {
 
@@ -280,53 +329,4 @@ rule governorOnlyNotAffectOtherMethods(env e, method f, calldataarg args)
 
     // Other methods can be executed when sender is not a governor
     satisfy(!reverted);
-}
-
-// GOV-02 | Only one governor can exist at one time
-rule onlyOneGovernorExists(env e1, env e2, method f, calldataarg args)
-    filtered { f -> GOVERNOR_ONLY_METHODS(f) } {
-
-    // In this case EVCAuthenticateGovernor() in governorOnly() modifier returns msg.sender
-    require(e1.msg.sender != EVC());
-    require(e2.msg.sender != EVC());
-
-    // First user is governor admin, second user is another
-    require(e1.msg.sender == governorAdmin());
-    require(e1.msg.sender != e2.msg.sender);
-
-    storage init = lastStorage;
-
-    f@withrevert(e1, args) at init;
-    bool revertedGovernor = lastReverted;
-
-    f@withrevert(e2, args) at init;
-    bool reverted = lastReverted;
-
-    // If the call with first sender was successful, than the call with another sender shound fail
-    assert(!revertedGovernor => reverted);
-} 
-
-// GOV-20 | Governor's ownership can be transferred
-rule ownershipCanBeTransferred(env e, address newGovernorAdmin) {
-
-    address before = governorAdmin();
-    
-    setGovernorAdmin(e, newGovernorAdmin);
-
-    address after = governorAdmin();
-
-    assert(after == newGovernorAdmin);
-}
-
-// GOV-21 | The ownership could be revoked by setting the governor to zero address
-rule ownershipCanBeRevoked(env e, calldataarg args) {
-
-    address before = governorAdmin();
-    require(before != 0);
-
-    setGovernorAdmin(e, args);
-
-    address after = governorAdmin();
-
-    satisfy(after == 0);
 }

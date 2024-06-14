@@ -5,7 +5,7 @@ use builtin rule sanity;
 use builtin rule hasDelegateCalls;
 use builtin rule msgValueInLoopRule;
 
-// VLT-01 | Specific functions require a vault status check
+// VLF-01 | Specific functions require a vault status check
 rule specificFunctionsRequireVaultStatusCheck(env e, method f, calldataarg args)
     filtered { f -> !HARNESS_METHODS(f) } {
 
@@ -27,7 +27,7 @@ rule specificFunctionsRequireVaultStatusCheck(env e, method f, calldataarg args)
     assert(VAULT_STATUS_CHECK_METHODS(f) <=> ghostRequireVaultStatusCheckCalled);
 }
 
-// VLT-02 | Specific functions require a vault and account status check
+// VLF-02 | Specific functions require a vault and account status check
 rule specificFunctionsRequireVaultAccountStatusCheck(env e, method f, calldataarg args)
     filtered { f -> !HARNESS_METHODS(f) } {
 
@@ -49,14 +49,14 @@ rule specificFunctionsRequireVaultAccountStatusCheck(env e, method f, calldataar
     assert(VAULT_ACCOUNT_STATUS_CHECK_METHODS(f) <=> ghostRequireVaultAccountStatusCheckCalled);
 }
 
-// VLT-05 | State change functions are protected against reentrancy
+// VLF-05 | State change functions are protected against reentrancy
 use rule stateChangeFunctionsReentrancyProtected;
 
-// VLT-07 | Anyone can execute view functions
+// VLF-07 | Anyone can execute view functions
 use rule anyoneCanExecuteViewFunctions;
 
-// VLT-08 | Specific view functions are protected against reentrancy, while others are not
+// VLF-08 | Specific view functions are protected against reentrancy, while others are not
 use rule specificViewFunctionsProtectedAgainstReentrancy;
 
-// VLT-10 | View functions don't update the state
+// VLF-10 | View functions don't update the state
 use rule viewFunctionsDontUpdateState;

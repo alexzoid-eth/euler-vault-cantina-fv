@@ -1,6 +1,7 @@
 import "./BaseMethods.spec";
 
 methods {
+    // RiskManager
     function accountLiquidity(address account, bool liquidation) external;
     function accountLiquidityFull(address account, bool liquidation) external;
     function disableController() external;

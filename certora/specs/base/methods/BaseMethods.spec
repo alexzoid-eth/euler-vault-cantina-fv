@@ -1,5 +1,4 @@
 methods {
-    
     // AbstractBaseHarness
     function LTVFullHarness(address collateral) external returns (uint16, uint16, uint16, uint48, uint32) envfree;
     function touchHarness() external;

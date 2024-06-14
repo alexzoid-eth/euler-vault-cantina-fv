@@ -1,7 +1,7 @@
 import "./base/Borrowing.spec";
 import "./common/State.spec";
 
-// @todo (mutation) [1] BRW- | Sum of three users' borrows must always be equal to the total borrows
+// @todo (mutation) BR1-01 | Sum of three users' borrows must always be equal to the total borrows
 
 function sumOfUsersBorrowsEqualTotalBorrowsReqCVL(address user1, address user2, address user3) {
     // Data of any other addresses are zero
