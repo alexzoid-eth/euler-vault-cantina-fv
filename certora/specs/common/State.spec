@@ -5,10 +5,11 @@ function requireValidStateCVL() {
     requireInvariant cashNotLessThanAssets;
     requireInvariant supplyBorrowCapsLimits;
     requireInvariant hooksLimits;
-    requireInvariant totalSharesBorrowsFeeLimits;
+    requireInvariant accumulatedFeesLimits;
     requireInvariant validateNotUseZeroAddress;
     requireInvariant noSelfCollateralization;
     requireInvariant uniqueLTVEntries;
+    requireInvariant ltvFractionScaled;
 }
 
 function requireValidStateEnvCVL(env e) {
@@ -20,11 +21,13 @@ function requireValidStateCollateralCVL(env e, address collateral) {
     requireInvariant borrowLTVLowerOrEqualLiquidationLTV(collateral);
     requireInvariant initializedLTVWhenSet(collateral);
     requireInvariant zeroTimestampInitializedSolvency(e, collateral);
-    requireInvariant LTVTimestampValid(e, collateral);
-    requireInvariant LTVTimestampFutureRamping(e, collateral);
+    requireInvariant ltvTimestampValid(e, collateral);
+    requireInvariant ltvTimestampFutureRamping(e, collateral);
     requireInvariant initializedLTVInCollateralList(collateral);
     requireInvariant zeroTimestampIndicatesLTVCleared(e, collateral);
     requireInvariant configParamsScaledTo1e4(collateral);
+    requireInvariant ltvLiquidationDynamic(e, collateral);
+    requireInvariant ltvRampingTimeWithinBounds(e, collateral);
 }
 
 // Vault MUST NOT be deinitialized
@@ -77,11 +80,9 @@ invariant hooksLimits()
     ghostHookedOps < OP_MAX_VALUE()
     filtered { f -> !HARNESS_METHODS(f) }
 
-// @todo (Vault) Total shares, total borrows, accumulated fees limitations
-invariant totalSharesBorrowsFeeLimits() 
-    ghostTotalShares < MAX_SANE_AMOUNT() 
-    && ghostTotalBorrows < MAX_SANE_DEBT_AMOUNT()
-    && ghostAccumulatedFees < MAX_SANE_AMOUNT()
+// Total shares, total borrows, accumulated fees limitations
+invariant accumulatedFeesLimits() 
+    ghostAccumulatedFees < MAX_SANE_AMOUNT()
     filtered { f -> !HARNESS_METHODS(f) }
 
 // Shares cannot be transferred to the zero address
@@ -124,7 +125,7 @@ invariant zeroTimestampInitializedSolvency(env e, address collateral)
 }
 
 // LTV's timestamp is always less than or equal to the current timestamp
-invariant LTVTimestampValid(env e, address collateral) 
+invariant ltvTimestampValid(env e, address collateral) 
     ghostLtvTargetTimestamp[collateral] == 0 || ghostLtvTargetTimestamp[collateral] >= to_mathint(e.block.timestamp) 
     filtered { f -> !HARNESS_METHODS(f) } {
         preserved with (env eFunc) {
@@ -133,7 +134,7 @@ invariant LTVTimestampValid(env e, address collateral)
     }
 
 // LTV's timestamp MUST be in the future only when ramping set
-invariant LTVTimestampFutureRamping(env e, address collateral)
+invariant ltvTimestampFutureRamping(env e, address collateral)
     ghostLtvTargetTimestamp[collateral] > to_mathint(e.block.timestamp) 
         => (ghostLtvRampDuration[collateral] >= ghostLtvTargetTimestamp[collateral] - to_mathint(e.block.timestamp)) 
     filtered { f -> !HARNESS_METHODS(f) } {
@@ -175,35 +176,37 @@ invariant uniqueLTVEntries()
     forall mathint i. forall mathint j. ghostLTVList[i] != ghostLTVList[j]
     filtered { f -> !HARNESS_METHODS(f) }
 
-// @todo The specified LTV is a fraction between 0 and 1 (scaled by 10,000)
-invariant ltvFractionScaled(env e, address collateral) 
-    to_mathint(getBorrowLTV(e, collateral)) <= CONFIG_SCALE()
-    && to_mathint(getLiquidationLTV(e, collateral)) <= CONFIG_SCALE()
+// The specified LTV is a fraction between 0 and 1 (scaled by 10,000)
+invariant ltvFractionScaled() 
+    forall address collateral. 
+        ghostBorrowLTV[collateral] <= CONFIG_SCALE() && ghostLiquidationLTV[collateral] <= CONFIG_SCALE()
     filtered { f -> !HARNESS_METHODS(f) }
 
-// @todo Liquidation LTV is calculated dynamically only when ramping is in progress and always 
+// Liquidation LTV is calculated dynamically only when ramping is in progress and always 
 //  between the target liquidation LTV and the initial liquidation LTV
-invariant LTVLiquidationDynamic(env e, address collateral) ghostLtvRampDuration[collateral] > 0
+invariant ltvLiquidationDynamic(env e, address collateral) 
+    ghostLtvRampDuration[collateral] == 0
     ? ghostLiquidationLTV[collateral] == to_mathint(getLiquidationLTV(e, collateral))
     : ghostLiquidationLTV[collateral] <= to_mathint(getLiquidationLTV(e, collateral))
         && to_mathint(getLiquidationLTV(e, collateral)) <= ghostInitialLiquidationLTV[collateral]
     filtered { f -> !HARNESS_METHODS(f) } {
         preserved with (env eFunc) {
             requireValidTimeStamp(e, eFunc);
-            requireInvariant LTVTimestampFutureRamping(e, collateral);
-            requireInvariant LTVTimestampValid(e, collateral);
+            requireInvariant ltvTimestampFutureRamping(e, collateral);
+            requireInvariant ltvTimestampValid(e, collateral);
         }
     }
 
-// @todo When ramping is in progress, the time remaining is always less than or equal to 
-//  the ramp duration
-invariant LTVRampingTimeWithinBounds(env e, address collateral) 
-    to_mathint(e.block.timestamp) < ghostLtvTargetTimestamp[collateral]
+// When ramping is in progress, the time remaining is always less than or equal to the ramp duration
+invariant ltvRampingTimeWithinBounds(env e, address collateral) 
+    ghostLtvRampDuration[collateral] != 0
         => (ghostLtvTargetTimestamp[collateral] - to_mathint(e.block.timestamp) 
-            < ghostLtvRampDuration[collateral]
+            <= ghostLtvRampDuration[collateral]
             )
     filtered { f -> !HARNESS_METHODS(f) } {
         preserved with (env eFunc) {
             requireValidTimeStamp(e, eFunc);
+            requireInvariant ltvTimestampFutureRamping(e, collateral);
+            requireInvariant ltvTimestampValid(e, collateral);
         } 
     }

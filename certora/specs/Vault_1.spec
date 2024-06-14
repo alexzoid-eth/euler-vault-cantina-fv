@@ -137,3 +137,8 @@ rule cashChangesAffectUserShares(env e, method f, calldataarg args, address user
         : to_mathint(balanceOf(e, user)) < balancePrev
     ));
 }
+
+// Snapshot is disabled if both caps are disabled (at low-level set to 0, but resolved to max_uint256)
+invariant snapshotDisabledWithBothCapsDisabled() 
+    ghostSupplyCap == 0 && ghostBorrowCap == 0 => ghostSnapshotInitialized == false
+    filtered { f -> !HARNESS_METHODS(f) }

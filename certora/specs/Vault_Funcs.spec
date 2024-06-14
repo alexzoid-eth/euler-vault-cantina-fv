@@ -4,7 +4,6 @@ import "./common/Funcs.spec";
 use builtin rule sanity;
 use builtin rule hasDelegateCalls;
 use builtin rule msgValueInLoopRule;
-use builtin rule viewReentrancy;
 
 // VLT-01 | Specific functions require a vault status check
 rule specificFunctionsRequireVaultStatusCheck(env e, method f, calldataarg args)
@@ -53,7 +52,7 @@ rule specificFunctionsRequireVaultAccountStatusCheck(env e, method f, calldataar
 // VLT-05 | State change functions are protected against reentrancy
 use rule stateChangeFunctionsReentrancyProtected;
 
-// @todo VLT-07 | Anyone can execute view functions
+// VLT-07 | Anyone can execute view functions
 use rule anyoneCanExecuteViewFunctions;
 
 // VLT-08 | Specific view functions are protected against reentrancy, while others are not

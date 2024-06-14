@@ -28,6 +28,9 @@ methods {
     function Cache.loadVault() internal returns (BaseHarness.VaultCache memory) with (env e) 
         => loadVaultAssumeNoUpdateCVL(e);
 
+    function _.hasAnyControllerEnabled(address caller) internal 
+        => hasAnyControllerEnabledCVL(caller) expect bool;
+
     function _.invokeHookTarget(address caller) internal => NONDET;
     function _.calculateDTokenAddress() internal => NONDET;
 
@@ -233,4 +236,9 @@ function CVLMulDiv(uint144 a, uint256 b, uint256 c) returns uint144 {
     mathint result = (a * b) / c; 
     require result <= max_uint144;
     return assert_uint144(result); 
+}
+
+persistent ghost mapping(address => bool) ghostAnyControllerEnabled;
+function hasAnyControllerEnabledCVL(address caller) returns bool {
+    return ghostAnyControllerEnabled[caller];
 }

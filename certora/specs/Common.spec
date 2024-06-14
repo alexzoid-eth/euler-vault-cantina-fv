@@ -9,7 +9,7 @@ use invariant snapshotStampAlwaysOne;
 use invariant cashNotLessThanAssets;
 use invariant supplyBorrowCapsLimits;
 use invariant hooksLimits;
-use invariant totalSharesBorrowsFeeLimits;
+use invariant accumulatedFeesLimits;
 use invariant validateNotUseZeroAddress;
 use invariant noSelfCollateralization;
 use invariant uniqueLTVEntries;
@@ -18,25 +18,19 @@ use invariant timestampSetWhenPositiveAccumulatedFees;
 use invariant borrowLTVLowerOrEqualLiquidationLTV;
 use invariant initializedLTVWhenSet;
 use invariant zeroTimestampInitializedSolvency;
-use invariant LTVTimestampValid;
-use invariant LTVTimestampFutureRamping;
+use invariant ltvTimestampValid;
+use invariant ltvTimestampFutureRamping;
 use invariant initializedLTVInCollateralList;
 use invariant zeroTimestampIndicatesLTVCleared;
 use invariant configParamsScaledTo1e4;
 use invariant ltvFractionScaled;
-use invariant LTVLiquidationDynamic;
-use invariant LTVRampingTimeWithinBounds;
+use invariant ltvLiquidationDynamic;
+use invariant ltvRampingTimeWithinBounds;
 
 // Functions are not able to receive native tokens
 use rule notAbleReceiveNativeTokens;
 
 definition HARNESS_METHODS(method f) returns bool = BASE_HARNESS_METHODS(f);
-
-// @todo Snapshot is disabled if both caps are disabled (at low-level set to 0, but resolved to max_uint256)
-invariant snapshotDisabledWithBothCapsDisabled() 
-    ghostSupplyCap == 0 && ghostBorrowCap == 0 => ghostSnapshotInitialized == false
-    filtered { f -> !HARNESS_METHODS(f) }
-
 
 // Snapshot MUST NOT be used when it is not initialized
 rule snapshotUsedWhenInitialized(env e, method f, calldataarg args) 
@@ -58,7 +52,6 @@ rule snapshotCashSetFromStorage(env e, method f, calldataarg args)
     filtered { f -> !HARNESS_METHODS(f) } {
 
     requireInvariant uninitializedSnapshotReset;
-    requireInvariant snapshotDisabledWithBothCapsDisabled;
 
     bool initialized = ghostSnapshotInitialized;
     mathint cashPrev = ghostCash;
@@ -124,18 +117,17 @@ rule interestFeesAccruedSetTimestamp(env e, method f, calldataarg args)
     );
 }
 
-// @todo Accumulated fees and interest accumulator are updated only when time has passed since the last update
-rule feesAndInterestNotUpdateNoTimePassed(env e, method f, calldataarg args)
+// Accumulated fees and interest accumulator are updated only when lastInterestAccumulatorUpdate changed
+rule feesAndInterestNotUpdateNoAccumulatorUpdate(env e, method f, calldataarg args)
     filtered { f -> !HARNESS_METHODS(f) } {
 
-    require(e.block.timestamp > 0);
-
+    mathint lastInterestAccumulatorUpdatePrev = ghostLastInterestAccumulatorUpdate;
     mathint interestAccumulatorPrev = ghostInterestAccumulator;
     mathint accumulatedFeesPrev = ghostAccumulatedFees;
 
     f(e, args);
 
-    assert(ghostLastInterestAccumulatorUpdate == to_mathint(e.block.timestamp) 
+    assert(lastInterestAccumulatorUpdatePrev == ghostLastInterestAccumulatorUpdate 
         => (interestAccumulatorPrev == ghostInterestAccumulator && accumulatedFeesPrev == ghostAccumulatedFees)
     );
 }
