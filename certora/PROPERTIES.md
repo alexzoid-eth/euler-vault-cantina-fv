@@ -12,24 +12,29 @@
 
 ## Common
 
-These properties are tested across multiple contracts: `Borrowing`, `Vault` (`Token`), `Governance`, `Liquidation`, and `RiskManager`. 
+These properties are global and include invariants and parametric rules, designed to be tested across multiple contracts: `Borrowing`, `Vault` (including `Token`), `Governance`, `Liquidation`, and `RiskManager`. 
 
 | Property | Description | Category | Mutation |
 | --- | --- | --- | --- |
-| COM-01 | Accumulated fees must result in an increase in the total shares of the vault |  |  |
+| COM-01 | Accumulated fees MUST result in an increase in the total shares of the vault |  |  |
 | COM-02 | Snapshot MUST NOT be used when it is not initialized |  |  |
 | COM-03 | Snapshot cash MUST set from storage cash or reset |  |  |
-| COM-04 | Clearing accumulated fees must move the fees to one or two designated fee receiver addresses |  |  |
+| COM-04 | Clearing accumulated fees MUST move the fees to one or two designated fee receiver addresses |  |  |
 | COM-05 | Functions are not able to receive native tokens |  |  |
-| COM-06 | Change accumulated fees accrued MUST set last interest accumulator timestamp |  |  |
+| COM-06 | Change interest accumulator or accumulated fees accrued MUST set last interest accumulator timestamp |  |  |
 | COM-07 | Accumulated fees and interest accumulator are updated only when lastInterestAccumulatorUpdate changed |  |  |
 | COM-08 | The vault's cash changes without assets transfer only when surplus assets available |  |  |
 | COM-09 | Transferring assets from the vault MUST decrease the available cash balance |  |  |
-| COM-10 | Changes in the cash balance must correspond to changes in the total shares |  |  |
-| COM-11 | Accumulated fees must not decrease unless they are being reset to zero |  |  |
+| COM-10 | Changes in the cash balance MUST correspond to changes in the total shares |  |  |
+| COM-11 | Accumulated fees MUST NOT decrease unless they are being reset to zero |  |  |
 | COM-12 | Fees are retrieved only for the contract itself from the protocol config contract |  |  |
 | COM-13 | Ramp duration can be used only when lowering liquidation LTV |  |  |
 | COM-14 | Collateral LTV MUST NOT be removed completely |  |  |
+| COM-15 | Interest accumulator always grows |  |  |
+| COM-16 | User interest accumulator always grows |  |  |
+| COM-17 | User interest accumulator set always when user borrow changes |  |  |
+| COM-18 | Interest accumulator cannot overflow |  |  |
+| COM-19 | Interest rate computed always for the current contract |  |  |
 
 The properties below are categorized as valid state properties, which can be used to assume a valid storage state in other high-level properties. 
 
@@ -46,7 +51,7 @@ The properties below are categorized as valid state properties, which can be use
 | ST-09 | Accumulated fees limitations | Valid State | |
 | ST-10 | Shares cannot be transferred to the zero address | Valid State | |
 | ST-11 | Self-collateralization is not allowed | Valid State | |
-| ST-12 | The borrow LTV must be lower than or equal to the liquidation LTV | Valid State | |
+| ST-12 | The borrow LTV MUST be lower than or equal to the liquidation LTV | Valid State | |
 | ST-13 | The LTV is always initialized when set | Valid State | |
 | ST-14 | LTV with zero timestamp should not be initialized | Valid State | |
 | ST-15 | LTV's timestamp is always less than or equal to the current timestamp | Valid State | |
@@ -58,24 +63,31 @@ The properties below are categorized as valid state properties, which can be use
 | ST-21 | The specified LTV is a fraction between 0 and 1 (scaled by 10,000) | Valid State | |
 | ST-22 | Liquidation LTV is calculated dynamically only when ramping is in progress and always between the target liquidation LTV and the initial liquidation LTV | Valid State | |
 | ST-23 | When ramping is in progress, the time remaining is always less than or equal to the ramp duration | Valid State | |
+| ST-24 | Config flags limitations | Valid State |  |
+| ST-25 | Transfer assets to zero address not allowed | Valid State |  |
+| ST-26 | Transfer assets to sub-account allowed only when asset is compatible with EVC | Valid State | |
+| ST-27 | User interest accumulator always less or equal vault interest accumulator | Valid State | |
+| ST-28 | User's interest accumulator set when non-zero owed | Valid State |  |
+| ST-29 | Interest accumulator is scaled by 1e27 | Valid State |  |
+| ST-30 | Interest rate zero when interest rate model contract is not set |  |
+| ST-31 | Interest rate has a maximum limit of 1,000,000 APY |  |
 
 ## Vault_1
 
 | Property | Description | Category | Mutation |
 | --- | --- | --- | --- |
 | VL1-01 | User's balance of assets MUST NOT increase after performing both input and output transactions within a single block |  |  |
-| VL1-02 | User balance plus accumulated fees must always be equal to the total shares (with only 1 user) |  |  |
-| VL1-03 | Sum of three users' balance must always be equal to the total shares (with only 3 users) |  |  |
-| VL1-04 | The vault's cash changes must be accompanied by assets transfer (when no surplus assets available) |  |  |
-| VL1-05 | Changes in the cash balance must correspond to changes in user's shares |  |  |
+| VL1-02 | User balance plus accumulated fees MUST always be equal to the total shares (with only 1 user) |  |  |
+| VL1-03 | Sum of three users' balance MUST always be equal to the total shares (with only 3 users) |  |  |
+| VL1-04 | The vault's cash changes MUST be accompanied by assets transfer (when no surplus assets available) |  |  |
+| VL1-05 | Changes in the cash balance MUST correspond to changes in user's shares |  |  |
 | VL1-06 | Snapshot is disabled if both caps are disabled (at low-level set to 0, but resolved to max_uint256) |  |  |
-| VL1-07 | Accumulated fees must always be less than or equal to total shares |  |  |
+| VL1-07 | Accumulated fees MUST always be less than or equal to total shares |  |  |
 
 ## Borrowing_1
 
 | Property | Description | Category | Mutation |
 | --- | --- | --- | --- |
-| BR1-01 | Sum of three users' borrows must always be equal to the total borrows | | |
 
 ## Governance_1
 
@@ -92,7 +104,7 @@ The properties below are categorized as valid state properties, which can be use
 | GV1-09 | The governor fee receiver can be disabled |  |  |
 | GV1-10 | If the governor receiver was not set, the protocol gets all fees |  |  |
 | GV1-11 | Protocol's fee share cannot be more than the max protocol fee share (50%) |  |  |
-| GV1-12 | While distributing fees, total shares MUST not change and accumulated fees are cleared |  |  |
+| GV1-12 | While distributing fees, total shares MUST NOT change and accumulated fees are cleared |  |  |
 | GV1-13 | While distributing fees, shares are transferred to governor and protocol fee receiver addresses |  |  |
 | GV1-14 | Accumulated fees only increase when some time has passed |  |  |
 | GV1-15 | The LTV can be set for a collateral asset, including borrow LTV, liquidation LTV, and ramp duration |  |  |
@@ -110,6 +122,7 @@ The properties below are categorized as valid state properties, which can be use
 
 | Property | Description | Category | Mutation |
 | --- | --- | --- | --- |
+| LQ-1 | Liquidation operations are prohibited until the cool-down period has passed |  |  |
 
 ## Funcs
 

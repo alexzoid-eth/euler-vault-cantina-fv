@@ -33,7 +33,7 @@ definition BORROWING_HARNESS_METHODS(method f) returns bool =
     || f.selector == sig:initOperationExternal(uint32,address).selector
     || f.selector == sig:getTotalBalance().selector
     || f.selector == sig:toAssetsExt(uint256).selector
-    || f.selector == sig:unpackBalanceExt(PackedUserSlot).selector
+    || f.selector == sig:unpackBalanceExt(BorrowingHarness.PackedUserSlot).selector
     || f.selector == sig:getUserInterestAccExt(address).selector
     || f.selector == sig:getVaultInterestAccExt().selector
     || f.selector == sig:getUnderlyingAssetExt().selector

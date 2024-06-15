@@ -26,6 +26,14 @@ use invariant configParamsScaledTo1e4;
 use invariant ltvFractionScaled;
 use invariant ltvLiquidationDynamic;
 use invariant ltvRampingTimeWithinBounds;
+use invariant configFlagsLimits;
+use invariant transferNotAllowedToZeroAddress;
+use invariant transferAllowedOnlyWithCompatibleAsset;
+use invariant userInterestAccumulatorLeqVault;
+use invariant userInterestAccumulatorSetWithNonZeroOwed;
+use invariant interestAccumulatorScaledBy1e27;
+use invariant interestRateZeroWithoutModel;
+use invariant interestRateMaxLimit;
 
 definition HARNESS_METHODS(method f) returns bool = BASE_HARNESS_METHODS(f);
 
@@ -102,17 +110,18 @@ rule feesClearedToReceivers(env e, method f, calldataarg args, address user1, ad
 // COM-05 | Functions are not able to receive native tokens
 use rule notAbleReceiveNativeTokens;
 
-// COM-06 | Change accumulated fees accrued MUST set last interest accumulator timestamp
+// COM-06 | Change interest accumulator or accumulated fees accrued MUST set last interest accumulator timestamp
 rule interestFeesAccruedSetTimestamp(env e, method f, calldataarg args)
     filtered { f -> !HARNESS_METHODS(f) } {
     
     requireInvariant lastInterestAccumulatorNotInFuture(e);
 
+    mathint interestAccumulatorPrev = ghostInterestAccumulator;
     mathint accumulatedFeesPrev = ghostAccumulatedFees;
 
     f(e, args);
     
-    assert(accumulatedFeesPrev != ghostAccumulatedFees
+    assert(interestAccumulatorPrev != ghostInterestAccumulator || accumulatedFeesPrev != ghostAccumulatedFees
         => ghostLastInterestAccumulatorUpdate == to_mathint(e.block.timestamp)
     );
 }
@@ -231,3 +240,65 @@ rule collateralLTVNotRemoved(env e, method f, calldataarg args, address collater
 
     assert(initialized => ghostLtvInitialized[collateral]);
 }
+
+// COM-15 | Interest accumulator always grows
+rule interestAccumulatorAlwaysGrows(env e, method f, calldataarg args) 
+    filtered { f -> !HARNESS_METHODS(f) } {
+
+    mathint interestAccumulatorPrev = ghostInterestAccumulator;
+
+    f(e, args);
+
+    assert(ghostInterestAccumulator >= interestAccumulatorPrev);
+}
+
+// COM-16 | User interest accumulator always grows
+rule userInterestAccumulatorAlwaysGrows(env e, method f, calldataarg args, address user) 
+    filtered { f -> !HARNESS_METHODS(f) } {
+
+    mathint usersInterestAccumulatorPrev = ghostUsersInterestAccumulator[user];
+
+    f(e, args);
+
+    assert(ghostUsersInterestAccumulator[user] >= usersInterestAccumulatorPrev);
+}
+
+// COM-17 | User interest accumulator set always when user borrow changes
+rule userInterestAccumulatorSetOnBorrowChange(env e, method f, calldataarg args, address user)
+    filtered { f -> !HARNESS_METHODS(f) } {
+
+    mathint userBorrowsPrev = getAccountOwed(user);
+    mathint usersInterestAccumulatorPrev = ghostUsersInterestAccumulator[user];
+
+    f(e, args);
+
+    assert(userBorrowsPrev != to_mathint(getAccountOwed(user)) 
+        ? ghostUsersInterestAccumulator[user] == ghostInterestAccumulator 
+        : ghostUsersInterestAccumulator[user] == usersInterestAccumulatorPrev
+        );
+}
+
+// COM-18 | Interest accumulator cannot overflow
+rule interestAccumulatorCannotOverflow(env e, method f, calldataarg args) 
+    filtered { f -> !HARNESS_METHODS(f) } {
+
+    requireValidStateEnvCVL(e);
+
+    mathint interestAccumulatorPrev = ghostInterestAccumulator;
+
+    uint256 x = require_uint256(ghostInterestRate + INTEREST_ACCUMULATOR_SCALE());
+    uint256 n = require_uint256(e.block.timestamp - ghostLastInterestAccumulatorUpdate);
+    uint256 scalar = require_uint256(INTEREST_ACCUMULATOR_SCALE());
+    uint256 multiplier;
+    bool overflow;
+    multiplier, overflow = CVLPow(x, n, scalar);
+
+    f(e, args);
+
+    assert(overflow => interestAccumulatorPrev == ghostInterestAccumulator);
+}
+
+// COM-19 | Interest rate computed always for the current contract
+invariant interestRateForCurrentContract()
+    ghostComputeInterestRateVault == currentContract
+    filtered { f -> !HARNESS_METHODS(f) } 

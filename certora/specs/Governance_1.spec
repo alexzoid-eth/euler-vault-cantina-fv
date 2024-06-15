@@ -236,9 +236,7 @@ rule governorAndProtocolReceiveFees(env e) {
 }
 
 // GV1-14 | Accumulated fees only increase when some time has passed
-rule fees
-
-IncreaseOverTime(env e1, env e2, method f1, method f2, calldataarg args1, calldataarg args2) 
+rule feesIncreaseOverTime(env e1, env e2, method f1, method f2, calldataarg args1, calldataarg args2) 
     // Exclude view functions and `convertFees()` to reduce complexity
     filtered { f1 -> !HARNESS_METHODS(f1) && !f1.isView && f1.selector != sig:convertFees().selector, 
         f2 -> !HARNESS_METHODS(f2) && !f2.isView && f2.selector != sig:convertFees().selector } {
@@ -303,7 +301,7 @@ rule LTVUpdateImmediate(env e, address collateral, uint16 borrowLTV, uint16 liqu
 rule initialLiquidationLTVSolvency(env e, method f, calldataarg args, address collateral) 
     filtered { f -> !HARNESS_METHODS(f) } {
 
-    require(e.block.timestamp > 0);
+    requireValidTimeStamp(e);
     requireInvariant LTVTimestampFutureRamping(e, collateral);
     requireInvariant LTVTimestampValid(e, collateral);
 

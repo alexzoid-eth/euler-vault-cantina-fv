@@ -10,6 +10,12 @@ function requireValidStateCVL() {
     requireInvariant noSelfCollateralization;
     requireInvariant uniqueLTVEntries;
     requireInvariant ltvFractionScaled;
+    requireInvariant configFlagsLimits;
+    requireInvariant transferNotAllowedToZeroAddress;
+    requireInvariant userInterestAccumulatorLeqVault;
+    requireInvariant interestAccumulatorScaledBy1e27;
+    requireInvariant interestRateZeroWithoutModel;
+    requireInvariant interestRateMaxLimit;
 }
 
 function requireValidStateEnvCVL(env e) {
@@ -19,6 +25,7 @@ function requireValidStateEnvCVL(env e) {
 }
 
 function requireValidStateCollateralCVL(env e, address collateral) {
+    requireValidStateEnvCVL(e);
     requireInvariant borrowLTVLowerOrEqualLiquidationLTV(collateral);
     requireInvariant initializedLTVWhenSet(collateral);
     requireInvariant zeroTimestampInitializedSolvency(e, collateral);
@@ -29,6 +36,12 @@ function requireValidStateCollateralCVL(env e, address collateral) {
     requireInvariant configParamsScaledTo1e4(collateral);
     requireInvariant ltvLiquidationDynamic(e, collateral);
     requireInvariant ltvRampingTimeWithinBounds(e, collateral);
+}
+
+function requireValidStateUser(address user) {
+    requireValidStateCVL();
+    requireInvariant transferAllowedOnlyWithCompatibleAsset(user);
+    requireInvariant userInterestAccumulatorSetWithNonZeroOwed(user);
 }
 
 // ST-01 | Vault MUST NOT be deinitialized
@@ -51,7 +64,7 @@ invariant timestampSetWhenPositiveAccumulatedFees(env e)
     ghostAccumulatedFees != 0 => ghostLastInterestAccumulatorUpdate != 0 
     filtered { f -> !HARNESS_METHODS(f) } {
         preserved with (env eFunc) {
-            requireValidTimeStamp(e, eFunc);
+            requireValidTimeStampInv(e, eFunc);
         } 
     }
 
@@ -61,7 +74,7 @@ invariant lastInterestAccumulatorNotInFuture(env e)
     ghostLastInterestAccumulatorUpdate <= to_mathint(e.block.timestamp) 
     filtered { f -> !HARNESS_METHODS(f) } {
         preserved with (env eFunc) {
-            requireValidTimeStamp(e, eFunc);
+            requireValidTimeStampInv(e, eFunc);
         } 
     }
 
@@ -121,7 +134,7 @@ invariant zeroTimestampInitializedSolvency(env e, address collateral)
         => (ghostBorrowLTV[collateral] == 0 && ghostLiquidationLTV[collateral] == 0) 
     filtered { f -> !HARNESS_METHODS(f) } {
     preserved with (env eFunc) {
-        requireValidTimeStamp(e, eFunc);
+        requireValidTimeStampInv(e, eFunc);
     } 
 }
 
@@ -130,7 +143,7 @@ invariant ltvTimestampValid(env e, address collateral)
     ghostLtvTargetTimestamp[collateral] == 0 || ghostLtvTargetTimestamp[collateral] >= to_mathint(e.block.timestamp) 
     filtered { f -> !HARNESS_METHODS(f) } {
         preserved with (env eFunc) {
-            requireValidTimeStamp(e, eFunc);
+            requireValidTimeStampInv(e, eFunc);
         } 
     }
 
@@ -140,7 +153,7 @@ invariant ltvTimestampFutureRamping(env e, address collateral)
         => (ghostLtvRampDuration[collateral] >= ghostLtvTargetTimestamp[collateral] - to_mathint(e.block.timestamp)) 
     filtered { f -> !HARNESS_METHODS(f) } {
         preserved with (env eFunc) {
-            requireValidTimeStamp(e, eFunc);
+            requireValidTimeStampInv(e, eFunc);
         } 
     }
 
@@ -161,7 +174,7 @@ invariant zeroTimestampIndicatesLTVCleared(env e, address collateral)
             && ghostLtvRampDuration[collateral] == 0 && ghostBorrowLTV[collateral] == 0 
         filtered { f -> !HARNESS_METHODS(f) } {
         preserved with (env eFunc) {
-            requireValidTimeStamp(e, eFunc);
+            requireValidTimeStampInv(e, eFunc);
         } 
     }
 
@@ -191,7 +204,7 @@ invariant ltvLiquidationDynamic(env e, address collateral)
         && to_mathint(getLiquidationLTV(e, collateral)) <= ghostInitialLiquidationLTV[collateral]
     filtered { f -> !HARNESS_METHODS(f) } {
         preserved with (env eFunc) {
-            requireValidTimeStamp(e, eFunc);
+            requireValidTimeStampInv(e, eFunc);
             requireInvariant ltvTimestampFutureRamping(e, collateral);
             requireInvariant ltvTimestampValid(e, collateral);
         }
@@ -205,9 +218,53 @@ invariant ltvRampingTimeWithinBounds(env e, address collateral)
             )
     filtered { f -> !HARNESS_METHODS(f) } {
         preserved with (env eFunc) {
-            requireValidTimeStamp(e, eFunc);
+            requireValidTimeStampInv(e, eFunc);
             requireInvariant ltvTimestampFutureRamping(e, collateral);
             requireInvariant ltvTimestampValid(e, collateral);
         } 
     }
 
+// ST-24 | Config flags limitations
+invariant configFlagsLimits()
+    ghostConfigFlags < CFG_MAX_VALUE()
+    filtered { f -> !HARNESS_METHODS(f) }
+
+// ST-25 | Transfer assets to zero address not allowed
+invariant transferNotAllowedToZeroAddress()
+    ghostErc20Balances[0] == 0
+    filtered { f -> !HARNESS_METHODS(f) }
+
+// ST-26 | Transfer assets to sub-account allowed only when asset is compatible with EVC
+invariant transferAllowedOnlyWithCompatibleAsset(address user)
+    // Transfer out from current contract
+    user != currentContract 
+    // To sub-account when asset is not compatible with EVC
+    && isKnownNonOwnerAccountHarness(user) && evcCompatibleAsset() == false
+        => ghostErc20Balances[user] == 0
+    filtered { f -> !HARNESS_METHODS(f) }
+
+// ST-27 | User interest accumulator always less or equal vault interest accumulator
+invariant userInterestAccumulatorLeqVault()
+    forall address user. ghostUsersInterestAccumulator[user] <= ghostInterestAccumulator
+    filtered { f -> !HARNESS_METHODS(f) }
+
+// ST-28 | User's interest accumulator set when non-zero owed
+invariant userInterestAccumulatorSetWithNonZeroOwed(address user)
+    getAccountOwed(user) != 0 => ghostUsersInterestAccumulator[user] != 0
+    filtered { f -> !HARNESS_METHODS(f) }
+
+// ST-29 | Interest accumulator is scaled by 1e27
+invariant interestAccumulatorScaledBy1e27() 
+    ghostInterestAccumulator >= INTEREST_ACCUMULATOR_SCALE()
+    && (forall address user. ghostUsersInterestAccumulator[user] >= INTEREST_ACCUMULATOR_SCALE())
+    filtered { f -> !HARNESS_METHODS(f) }
+
+// ST-30 | Interest rate zero when interest rate model contract is not set
+invariant interestRateZeroWithoutModel()
+    ghostInterestRateModel == 0 => ghostInterestRate == 0
+    filtered { f -> !HARNESS_METHODS(f) } 
+
+// ST-31 | Interest rate has a maximum limit of 1,000,000 APY
+invariant interestRateMaxLimit()
+    ghostInterestRate <= MAX_ALLOWED_INTEREST_RATE()
+    filtered { f -> !HARNESS_METHODS(f) } 

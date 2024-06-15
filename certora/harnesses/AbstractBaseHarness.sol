@@ -29,6 +29,14 @@ abstract contract AbstractBaseHarness is InitializeModule  {
         );
     }
 
+    function isKnownNonOwnerAccountHarness(address account) public returns (bool) {
+        return isKnownNonOwnerAccount(account);
+    }
+
+    function evcCompatibleAsset() public returns (bool) {
+        return vaultStorage.configFlags.isSet(CFG_EVC_COMPATIBLE_ASSET);
+    }
+
     function touchHarness() public {
         initOperation(OP_TOUCH, CHECKACCOUNT_NONE);
     }
@@ -41,8 +49,8 @@ abstract contract AbstractBaseHarness is InitializeModule  {
         return vaultStorage.ltvLookup[collateral].getLTV(true).toUint16();
     }
 
-    function debtOfExactHarness(address account) public returns (uint256) {
-        return getCurrentOwed(loadVault(), account).toUint();
+    function getAccountOwed(address account) public returns (uint256) {
+        return vaultStorage.users[account].getOwed().toUint();
     }
 
     function borrowsToAssetsUp(uint256 amount) public returns (uint256) {

@@ -11,7 +11,8 @@ methods {
     //
     
     // Resolve asset to DummyERC20A
-    function ProxyUtils.metadata() internal returns (address, address, address) => metadataCVL();
+    function ProxyUtils.metadata() internal returns (address, address, address) 
+        => metadataCVL();
 
     function _.mulDiv(uint144 a, uint256 b, uint256 c) internal => CVLMulDiv(a, b, c) expect uint144;
 
@@ -20,7 +21,8 @@ methods {
     function _.safeTransferFrom(address token, address from, address to, uint256 value, address permit2) internal with (env e)
         => trySafeTransferFromCVL(e, from, to, value) expect (bool, bytes memory);
 
-    function RPow.rpow(uint256 x, uint256 y, uint256 base) internal returns (uint256, bool) => CVLPow(x, y, base);
+    function RPow.rpow(uint256 x, uint256 y, uint256 base) internal returns (uint256, bool) 
+        => CVLPow(x, y, base);
 
     function _.logVaultStatus(BaseHarness.VaultCache memory a, uint256 interestRate) internal 
         => logVaultStatusCVL(interestRate) expect void;
@@ -76,8 +78,10 @@ methods {
     // IRM
     //
 
-    function _.computeInterestRate(address vault, uint256 cash, uint256 borrows) external => NONDET;
-    function _.computeInterestRateView(address vault, uint256 cash, uint256 borrows) external => NONDET;
+    function _.computeInterestRate(address vault, uint256 cash, uint256 borrows) external 
+        => computeInterestRateCVL(vault, cash, borrows) expect uint256 ALL;
+    function _.computeInterestRateView(address vault, uint256 cash, uint256 borrows) external 
+        => computeInterestRateCVL(vault, cash, borrows) expect uint256 ALL;
 
     //
     // FlashLoan
@@ -105,16 +109,23 @@ methods {
 
     function _.requireVaultStatusCheck() external 
         => requireVaultStatusCheckCVL() expect void;
+    
     function _.requireAccountAndVaultStatusCheck(address caller) external 
         => requireVaultAccountStatusCheckCVL(caller) expect void;
+    
     function _.getCurrentOnBehalfOfAccount(address controllerToCheck) external 
         => getCurrentOnBehalfOfAccountCVL(controllerToCheck) expect (address, bool) ALL;
+    
+    function _.getLastAccountStatusCheckTimestamp(address account) external with (env e)
+        => getLastAccountStatusCheckTimestampCVL(e, account) expect uint256 ALL;
+
+    function _.getAccountOwner(address account) external
+        => getAccountOwnerCVL(account) expect address ALL;
 
     function _.areChecksInProgress() external => NONDET;
     function _.disableController(address account) external => NONDET;
     function _.isOperatorAuthenticated() external => NONDET;
     function _.isControlCollateralInProgress() external => NONDET;
-    function _.getAccountOwner(address account) external => NONDET;
     function _.controlCollateral(address targetCollateral, address onBehalfOfAccount, uint256 value, bytes) external => NONDET;
     function _.forgiveAccountStatusCheck(address account) external => NONDET;
     function _.getControllers(address account) external => NONDET;
@@ -122,7 +133,6 @@ methods {
     function _.isCollateralEnabled(address account, address vault) external => NONDET;
     function _.isAccountStatusCheckDeferred(address account) external => NONDET;
     function _.isVaultStatusCheckDeferred(address vault) external => NONDET;
-    function _.getLastAccountStatusCheckTimestamp(address account) external => NONDET;
     function _.isControllerEnabled(address account, address vault) external => NONDET;
 
     //
@@ -132,6 +142,11 @@ methods {
     function _.reserveSeqId(string) external => NONDET;
 }
 
+// max interest rate accepted from IRM. 1,000,000% APY: floor(((1000000 / 100 + 1)**(1/(86400*365.2425)) - 1) * 1e27)
+definition MAX_ALLOWED_INTEREST_RATE() returns mathint = 291867278914945094175;
+
+definition INTEREST_ACCUMULATOR_SCALE() returns mathint = 1^27;
+
 definition CONFIG_SCALE() returns mathint = 10^4;
 definition MAX_SANE_AMOUNT() returns mathint = max_uint112;
 
@@ -139,6 +154,7 @@ definition INTERNAL_DEBT_PRECISION_SHIFT() returns uint256 = 31;
 definition MAX_SANE_DEBT_AMOUNT() returns mathint = require_uint256(MAX_SANE_AMOUNT()) << INTERNAL_DEBT_PRECISION_SHIFT();
 
 definition OP_MAX_VALUE() returns mathint = 1<<15;
+definition CFG_MAX_VALUE() returns mathint = 1<<2;
 
 definition CHECKACCOUNT_NONE() returns address = 0;
 definition CHECKACCOUNT_CALLER() returns address = 1;
@@ -149,11 +165,15 @@ definition OWED_MASK() returns uint256 = 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0
 definition OWED_OFFSET() returns uint256 = 112;
 definition OWED_FROM_DATA(uint256 data) returns uint256 = (data & OWED_MASK()) >> OWED_OFFSET();
 
-function requireValidTimeStamp(env eInv, env eFunc) {
-    require(eInv.block.timestamp == eFunc.block.timestamp);
-    require(eFunc.block.timestamp > 0);
+function requireValidTimeStamp(env e) {
+    require(e.block.timestamp > 0);
     // There is a safe accumption limit timestamp to 3000 year
-    require(to_mathint(eFunc.block.timestamp) < TIMESTAMP_3000_YEAR());
+    require(to_mathint(e.block.timestamp) < TIMESTAMP_3000_YEAR());
+}
+
+function requireValidTimeStampInv(env eInv, env e) {
+    require(eInv.block.timestamp == e.block.timestamp);
+    requireValidTimeStamp(e);
 }
 
 ghost CVLGetQuote(uint256, address, address) returns uint256 {
@@ -170,6 +190,13 @@ function CVLGetQuotes(uint256 amount, address base, address quote) returns (uint
         CVLGetQuote(amount, base, quote),
         CVLGetQuote(amount, base, quote)
     );
+}
+
+persistent ghost mapping(address => mapping(uint256 => mapping(uint256 => uint256))) ghostComputedInterestRate;
+persistent ghost address ghostComputeInterestRateVault;
+function computeInterestRateCVL(address vault, uint256 cash, uint256 borrows) returns uint256 {
+    ghostComputeInterestRateVault = vault;
+    return ghostComputedInterestRate[vault][cash][borrows];
 }
 
 persistent ghost bool ghostProtocolFeeConfigCalled;
@@ -196,6 +223,17 @@ function getCurrentOnBehalfOfAccountCVL(address controllerToCheck) returns (addr
     require(ghostOnBehalfOfAccount != 0);
     require(ghostOnBehalfOfAccount != currentContract);
     return (ghostOnBehalfOfAccount, controllerToCheck == 0 => ghostControllerEnabled == false);
+}
+
+persistent ghost mathint ghostLastAccountStatusCheckTimestamp;
+function getLastAccountStatusCheckTimestampCVL(env e, address account) returns uint256 {
+    require(ghostLastAccountStatusCheckTimestamp <= to_mathint(e.block.timestamp));
+    return require_uint256(ghostLastAccountStatusCheckTimestamp);
+}
+ 
+persistent ghost mapping (address => address) ghostAccountOwner;
+function getAccountOwnerCVL(address account) returns address {
+    return ghostAccountOwner[account];
 }
 
 persistent ghost bool ghostRequireVaultStatusCheckCalled;

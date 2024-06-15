@@ -3,7 +3,7 @@ import "./BaseMethods.spec";
 methods {
     // LiquidationHarness
     function calculateLiquidityExternal(address account) external returns (uint256, uint256);
-    function calculateLiquidationExt(LiquidationHarness.VaultCache vaultCache, address liquidator, address violator, address collateral, uint256 desiredRepay) external returns (LiquidationHarness.LiquidationCache);
+    function calculateLiquidationExt(LiquidationHarness.VaultCache vaultCache, address liquidator, address violator, address collateral, uint256 desiredRepay) external returns (LiquidationModule.LiquidationCache);
     function isRecognizedCollateralExt(address collateral) external returns (bool);
     function getLiquidator() external returns (address);
     function getCurrentOwedExt(LiquidationHarness.VaultCache vaultCache, address violator) external returns (LiquidationHarness.Assets) envfree;
