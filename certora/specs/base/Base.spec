@@ -53,7 +53,7 @@ methods {
     //
 
     function _.balanceTrackerHook(address account, uint256 newAccountBalance, bool forfeitRecentReward) external 
-        => NONDET;
+        => balanceTrackerHookCVL(account, newAccountBalance, forfeitRecentReward) expect void;
 
     //
     // PriceOracle
@@ -122,10 +122,12 @@ methods {
     function _.getAccountOwner(address account) external
         => getAccountOwnerCVL(account) expect address ALL;
 
+    function _.isControlCollateralInProgress() external 
+        => isControlCollateralInProgressCVL() expect bool ALL;
+
     function _.areChecksInProgress() external => NONDET;
     function _.disableController(address account) external => NONDET;
     function _.isOperatorAuthenticated() external => NONDET;
-    function _.isControlCollateralInProgress() external => NONDET;
     function _.controlCollateral(address targetCollateral, address onBehalfOfAccount, uint256 value, bytes) external => NONDET;
     function _.forgiveAccountStatusCheck(address account) external => NONDET;
     function _.getControllers(address account) external => NONDET;
@@ -141,6 +143,9 @@ methods {
 
     function _.reserveSeqId(string) external => NONDET;
 }
+
+// Governor is guaranteed that the protocol fee share will not exceed this value (0.5e4)
+definition MAX_PROTOCOL_FEE_SHARE() returns mathint = 5 * 10^3;
 
 // max interest rate accepted from IRM. 1,000,000% APY: floor(((1000000 / 100 + 1)**(1/(86400*365.2425)) - 1) * 1e27)
 definition MAX_ALLOWED_INTEREST_RATE() returns mathint = 291867278914945094175;
@@ -192,6 +197,22 @@ function CVLGetQuotes(uint256 amount, address base, address quote) returns (uint
     );
 }
 
+persistent ghost bool ghostIsControlCollateralInProgress;
+function isControlCollateralInProgressCVL() returns bool {
+    return ghostIsControlCollateralInProgress;
+}
+
+persistent ghost bool ghostBalanceTrackerHookCalled;
+persistent ghost address ghostBalanceTrackerHookAccount;
+persistent ghost mathint ghostBalanceTrackerHookBalance;
+persistent ghost bool ghostBalanceTrackerHookForfeit;
+function balanceTrackerHookCVL(address account, uint256 newAccountBalance, bool forfeitRecentReward) {
+    ghostBalanceTrackerHookCalled = true;
+    ghostBalanceTrackerHookAccount = account;
+    ghostBalanceTrackerHookBalance = newAccountBalance;
+    ghostBalanceTrackerHookForfeit = forfeitRecentReward;
+}
+
 persistent ghost mapping(address => mapping(uint256 => mapping(uint256 => uint256))) ghostComputedInterestRate;
 persistent ghost address ghostComputeInterestRateVault;
 function computeInterestRateCVL(address vault, uint256 cash, uint256 borrows) returns uint256 {
@@ -241,9 +262,11 @@ function requireVaultStatusCheckCVL() {
     ghostRequireVaultStatusCheckCalled = true;
 }
 
+persistent ghost address ghostRequireVaultAccountStatusCheckCaller;
 persistent ghost bool ghostRequireVaultAccountStatusCheckCalled;
 function requireVaultAccountStatusCheckCVL(address caller) {
     ghostRequireVaultAccountStatusCheckCalled = true;
+    ghostRequireVaultAccountStatusCheckCaller = caller;
     assert(caller != CHECKACCOUNT_CALLER());
 }
 

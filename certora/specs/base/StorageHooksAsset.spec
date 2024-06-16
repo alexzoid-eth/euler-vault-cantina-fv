@@ -7,7 +7,6 @@ using DummyERC20A as _Asset;
 ghost mapping (address => mathint) ghostErc20Balances {
     init_state axiom forall address i. ghostErc20Balances[i] == 0;
     axiom forall address i. ghostErc20Balances[i] >= 0 && ghostErc20Balances[i] <= max_uint256;
-    //axiom forall address i. ghostErc20Balances[i] <= ghostErc20TotalSupply;
 }
 
 hook Sload uint256 val _Asset.b[KEY address i] {

@@ -464,6 +464,8 @@ hook Sstore currentContract.vaultStorage.users[KEY address i].interestAccumulato
 // vaultStorage.users[].eTokenAllowance[]
 //
 
+persistent ghost bool ghostAllowanceTouched;
+
 persistent ghost mapping (address => mapping (address => mathint)) ghostUsersETokenAllowance {
     init_state axiom forall address i. forall address j. ghostUsersETokenAllowance[i][j] == 0;
     axiom forall address i. forall address j. ghostUsersETokenAllowance[i][j] >= 0 && ghostUsersETokenAllowance[i][j] <= max_uint256;
@@ -474,6 +476,7 @@ hook Sload uint256 val currentContract.vaultStorage.users[KEY address i].eTokenA
 } 
 
 hook Sstore currentContract.vaultStorage.users[KEY address i].eTokenAllowance[KEY address j] uint256 val {
+    ghostAllowanceTouched = true;
     ghostUsersETokenAllowance[i][j] = val;
 }
 

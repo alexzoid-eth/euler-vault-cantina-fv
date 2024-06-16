@@ -265,7 +265,7 @@ rule setLTVPossibility(env e, calldataarg args, address collateral) {
     uint16 initialLiquidationLTV;
     uint48 targetTimestamp;
     uint32 rampDuration;
-    borrowLTV, liquidationLTV, initialLiquidationLTV, targetTimestamp, rampDuration = LTVFull(collateral);
+    borrowLTV, liquidationLTV, initialLiquidationLTV, targetTimestamp, rampDuration = LTVFull(e, collateral);
 
     setLTV(e, args);
 
@@ -274,7 +274,7 @@ rule setLTVPossibility(env e, calldataarg args, address collateral) {
     uint16 _initialLiquidationLTV;
     uint48 _targetTimestamp;
     uint32 _rampDuration;
-    _borrowLTV, _liquidationLTV, _initialLiquidationLTV, _targetTimestamp, _rampDuration = LTVFull(collateral);
+    _borrowLTV, _liquidationLTV, _initialLiquidationLTV, _targetTimestamp, _rampDuration = LTVFull(e, collateral);
 
     satisfy(borrowLTV != _borrowLTV);
     satisfy(liquidationLTV != _liquidationLTV);
@@ -301,15 +301,16 @@ rule LTVUpdateImmediate(env e, address collateral, uint16 borrowLTV, uint16 liqu
 rule initialLiquidationLTVSolvency(env e, method f, calldataarg args, address collateral) 
     filtered { f -> !HARNESS_METHODS(f) } {
 
-    requireValidTimeStamp(e);
-    requireInvariant LTVTimestampFutureRamping(e, collateral);
-    requireInvariant LTVTimestampValid(e, collateral);
+    requireValidStateCollateralCVL(e, collateral);
 
     mathint liquidationLTVPrev = ghostLiquidationLTV[collateral];
+    mathint ltvTargetTimestampPrev = ghostLtvTargetTimestamp[collateral];
 
     f(e, args);
 
-    assert(ghostLtvTargetTimestamp[collateral] != 0
+    // LTV target was changed and was not cleared
+    assert(ltvTargetTimestampPrev != ghostLtvTargetTimestamp[collateral] 
+        && ghostLtvTargetTimestamp[collateral] != 0
         => ghostInitialLiquidationLTV[collateral] == liquidationLTVPrev
             || ghostInitialLiquidationLTV[collateral] >= ghostLiquidationLTV[collateral]
     );

@@ -19,7 +19,7 @@ methods {
     function caps() external returns (uint16, uint16) envfree;
     function LTVBorrow(address) external returns (uint16);
     function LTVLiquidation(address) external returns (uint16);
-    function LTVFull(address) external returns (uint16, uint16, uint16, uint48, uint32) envfree;
+    function LTVFull(address) external returns (uint16, uint16, uint16, uint48, uint32); // Not set as envfree to support issue fix
     function LTVList() external returns (address[] memory) envfree;
     function maxLiquidationDiscount() external returns (uint16) envfree;
     function liquidationCoolOffTime() external returns (uint16) envfree;

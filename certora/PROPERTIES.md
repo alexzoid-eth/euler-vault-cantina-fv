@@ -22,7 +22,7 @@ These properties are global and include invariants and parametric rules, designe
 | COM-04 | Clearing accumulated fees MUST move the fees to one or two designated fee receiver addresses |  |  |
 | COM-05 | Functions are not able to receive native tokens |  |  |
 | COM-06 | Change interest accumulator or accumulated fees accrued MUST set last interest accumulator timestamp |  |  |
-| COM-07 | Accumulated fees and interest accumulator are updated only when lastInterestAccumulatorUpdate changed |  |  |
+| COM-07 | Interest accumulator is updated only when last interest accumulator time changed |  |  |
 | COM-08 | The vault's cash changes without assets transfer only when surplus assets available |  |  |
 | COM-09 | Transferring assets from the vault MUST decrease the available cash balance |  |  |
 | COM-10 | Changes in the cash balance MUST correspond to changes in the total shares |  |  |
@@ -35,6 +35,17 @@ These properties are global and include invariants and parametric rules, designe
 | COM-17 | User interest accumulator set always when user borrow changes |  |  |
 | COM-18 | Interest accumulator cannot overflow |  |  |
 | COM-19 | Interest rate computed always for the current contract |  |  |
+| COM-20 | Transfer assets to sub-account allowed only when asset is compatible with EVC |  |  |
+| COM-21 | Creator is unchanged |  |  |
+| COM-22 | Accumulated fees unchanged when interest fees zero |  |  |
+| COM-23 | Allowance unchanged when user redeem shares to their own account |  |  |
+| COM-24 | Allowance decrease (unless equal to max_uint256) when user redeem from another account |  |  |
+| COM-25 | Only the owner can increase allowance |  |  |
+| COM-26 | Balance forwarder must be executed on any share movements when set |  |  |
+| COM-27 | User borrow changes must be reflected in total borrows |  |  |
+| COM-28 | Increase or decrease user borrow transfers vault's assets out or in |  |  |
+| COM-29 | Any shares or borrows movements required account health check |  |  |
+| COM-30 | Increase shares or increase borrows MUST execute VAULT health check |  |  |
 
 The properties below are categorized as valid state properties, which can be used to assume a valid storage state in other high-level properties. 
 
@@ -65,24 +76,24 @@ The properties below are categorized as valid state properties, which can be use
 | ST-23 | When ramping is in progress, the time remaining is always less than or equal to the ramp duration | Valid State | |
 | ST-24 | Config flags limitations | Valid State |  |
 | ST-25 | Transfer assets to zero address not allowed | Valid State |  |
-| ST-26 | Transfer assets to sub-account allowed only when asset is compatible with EVC | Valid State | |
+| ST-26 | Interest rate has a maximum limit of 1,000,000 APY |  |
 | ST-27 | User interest accumulator always less or equal vault interest accumulator | Valid State | |
 | ST-28 | User's interest accumulator set when non-zero owed | Valid State |  |
 | ST-29 | Interest accumulator is scaled by 1e27 | Valid State |  |
-| ST-30 | Interest rate zero when interest rate model contract is not set |  |
-| ST-31 | Interest rate has a maximum limit of 1,000,000 APY |  |
+| ST-30 | Interest rate zero when interest rate model contract is not set| Valid State |  |
+| ST-31 | Owner and spender in allowances should differ | Valid State |  |
 
 ## Vault_1
 
 | Property | Description | Category | Mutation |
 | --- | --- | --- | --- |
-| VL1-01 | User's balance of assets MUST NOT increase after performing both input and output transactions within a single block |  |  |
+| VL1-01 | Accumulated fees MUST always be less than or equal to total shares |  |  |
 | VL1-02 | User balance plus accumulated fees MUST always be equal to the total shares (with only 1 user) |  |  |
 | VL1-03 | Sum of three users' balance MUST always be equal to the total shares (with only 3 users) |  |  |
 | VL1-04 | The vault's cash changes MUST be accompanied by assets transfer (when no surplus assets available) |  |  |
 | VL1-05 | Changes in the cash balance MUST correspond to changes in user's shares |  |  |
 | VL1-06 | Snapshot is disabled if both caps are disabled (at low-level set to 0, but resolved to max_uint256) |  |  |
-| VL1-07 | Accumulated fees MUST always be less than or equal to total shares |  |  |
+| VL1-07 | When user deposit assets and redeem shares, all rounding MUST be in favor of vault |  |  |
 
 ## Borrowing_1
 

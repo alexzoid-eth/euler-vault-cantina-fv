@@ -1,44 +1,18 @@
 import "./base/Vault.spec";
 import "./common/State.spec";
 
-// @todo
-// VL1-01 | User's balance of assets MUST NOT increase after performing both input and output transactions within a single block
-rule userBalanceNotIncreaseAfterInputOutputInSingleBlock(
-        env e, method f1, method f2, uint256 amountIn, uint256 amountOut, address user
-        ) filtered { f1 -> INPUT_METHODS(f1), f2 -> OUTPUT_METHODS(f2) } {
-
-    // Require valid storage
-    requireValidStateEnvCVL(e);
-
-    // Initially zero balance
-    require(ghostUsersDataBalance[user] == 0);
-
-    // User is authenticated account
-    require(user == ghostOnBehalfOfAccount);
-
-    // Amount of assets before
-    mathint balanceBefore = _Asset.balanceOf(e, user);
-
-    // Input tokens
-    if(f1.selector == sig:deposit(uint256,address).selector) {
-        deposit(e, amountIn, user);
-    } else if(f1.selector == sig:mint(uint256,address).selector) {
-        mint(e, amountIn, user);
+// VL1-01 | Accumulated fees must always be less than or equal to total shares
+invariant accumulatedFeesLeqShares(address user) 
+    ghostAccumulatedFees <= ghostTotalShares
+    filtered { f -> !HARNESS_METHODS(f) } {
+        // User's balance MUST not be greater than total shares (take scenario with only one user)
+        preserved withdraw(uint256 amount, address receiver, address owner) with (env e) {
+            requireInvariant userBalanceEqualTotalShares(owner);
+        }
+        preserved redeem(uint256 amount, address receiver, address owner) with (env e) {
+            requireInvariant userBalanceEqualTotalShares(owner);
+        }
     }
-
-    // Output tokens
-    if(f2.selector == sig:withdraw(uint256,address,address).selector) {
-        withdraw(e, amountOut, user, user);
-    } else if(f2.selector == sig:redeem(uint256,address,address).selector) {
-        redeem(e, amountOut, user, user);
-    }
-
-    // Amount of assets after
-    mathint balanceAfter = _Asset.balanceOf(e, user);
-
-    // User's assets MUST not grow in one block
-    assert(balanceAfter <= balanceBefore);
-}
 
 // VL1-02 | User balance plus accumulated fees must always be equal to the total shares (with only 1 user)
 function userBalanceEqualTotalSharesReqCVL(address user) {
@@ -173,9 +147,7 @@ rule cashChangesAffectUserShares(env e, method f, calldataarg args, address user
         f(e, args);
     }
 
-    assert(cashPrev
-
- != ghostCash => (
+    assert(cashPrev != ghostCash => (
         ghostCash > cashPrev
         ? to_mathint(balanceOf(e, user)) > balancePrev
         : to_mathint(balanceOf(e, user)) < balancePrev
@@ -187,15 +159,26 @@ invariant snapshotDisabledWithBothCapsDisabled()
     ghostSupplyCap == 0 && ghostBorrowCap == 0 => ghostSnapshotInitialized == false
     filtered { f -> !HARNESS_METHODS(f) }
 
-// VL1-07 | Accumulated fees must always be less than or equal to total shares
-invariant accumulatedFeesLeqShares(address user) 
-    ghostAccumulatedFees <= ghostTotalShares
-    filtered { f -> !HARNESS_METHODS(f) } {
-        // User's balance MUST not be greater than total shares (take scenario with only one user)
-        preserved withdraw(uint256 amount, address receiver, address owner) with (env e) {
-            requireInvariant userBalanceEqualTotalShares(owner);
-        }
-        preserved redeem(uint256 amount, address receiver, address owner) with (env e) {
-            requireInvariant userBalanceEqualTotalShares(owner);
-        }
-    }
+// VL1-07 | When user deposit assets and redeem shares, all rounding MUST be in favor of vault
+rule roundingFavorsVaultOnDepositRedeem(env e, address user) {
+
+    // Require valid storage
+    requireValidStateEnvCVL(e);
+
+    // User is authenticated account
+    require(user == ghostOnBehalfOfAccount);
+
+    // Amount of assets before
+    mathint balanceBefore = ghostErc20Balances[user];
+
+    // Input assets
+    uint256 sharesOut;
+    uint256 assetsIn;
+    sharesOut = deposit(e, assetsIn, user);
+
+    // Output assets
+    redeem(e, sharesOut, user, user);
+
+    // User's assets MUST not grow in one block
+    assert(balanceBefore >= ghostErc20Balances[user]);
+}

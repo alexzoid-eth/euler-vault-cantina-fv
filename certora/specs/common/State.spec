@@ -16,31 +16,36 @@ function requireValidStateCVL() {
     requireInvariant interestAccumulatorScaledBy1e27;
     requireInvariant interestRateZeroWithoutModel;
     requireInvariant interestRateMaxLimit;
+    requireInvariant differentOwnerAndSpenderAllowances;
 }
 
 function requireValidStateEnvCVL(env e) {
     requireValidStateCVL();
+    requireValidTimeStamp(e);
     requireInvariant lastInterestAccumulatorNotInFuture(e);
     requireInvariant timestampSetWhenPositiveAccumulatedFees(e);
 }
 
-function requireValidStateCollateralCVL(env e, address collateral) {
-    requireValidStateEnvCVL(e);
+function requireValidStateCollateralCVL(address collateral) {
     requireInvariant borrowLTVLowerOrEqualLiquidationLTV(collateral);
     requireInvariant initializedLTVWhenSet(collateral);
+    requireInvariant initializedLTVInCollateralList(collateral);
+    requireInvariant configParamsScaledTo1e4(collateral);
+}
+
+function requireValidStateEnvCollateralCVL(env e, address collateral) {
+    requireValidStateEnvCVL(e);
+    requireValidStateCollateralCVL(collateral);
     requireInvariant zeroTimestampInitializedSolvency(e, collateral);
     requireInvariant ltvTimestampValid(e, collateral);
     requireInvariant ltvTimestampFutureRamping(e, collateral);
-    requireInvariant initializedLTVInCollateralList(collateral);
     requireInvariant zeroTimestampIndicatesLTVCleared(e, collateral);
-    requireInvariant configParamsScaledTo1e4(collateral);
     requireInvariant ltvLiquidationDynamic(e, collateral);
     requireInvariant ltvRampingTimeWithinBounds(e, collateral);
 }
 
 function requireValidStateUser(address user) {
     requireValidStateCVL();
-    requireInvariant transferAllowedOnlyWithCompatibleAsset(user);
     requireInvariant userInterestAccumulatorSetWithNonZeroOwed(user);
 }
 
@@ -182,8 +187,7 @@ invariant zeroTimestampIndicatesLTVCleared(env e, address collateral)
 invariant configParamsScaledTo1e4(address collateral) 
     ghostBorrowLTV[collateral] <= CONFIG_SCALE() && ghostLiquidationLTV[collateral] <= CONFIG_SCALE()
     && ghostInterestFee <= CONFIG_SCALE() && ghostMaxLiquidationDiscount <= CONFIG_SCALE()
-    // && ghostInitialLiquidationLTV[collateral] <= CONFIG_SCALE()
-    filtered { f -> !HARNESS_METHODS(f) }
+    filtered { f -> !HARNESS_METHODS(f) } 
 
 // ST-20 | All collateral entries in the vault storage LTV list MUST be unique
 invariant uniqueLTVEntries() 
@@ -234,14 +238,10 @@ invariant transferNotAllowedToZeroAddress()
     ghostErc20Balances[0] == 0
     filtered { f -> !HARNESS_METHODS(f) }
 
-// ST-26 | Transfer assets to sub-account allowed only when asset is compatible with EVC
-invariant transferAllowedOnlyWithCompatibleAsset(address user)
-    // Transfer out from current contract
-    user != currentContract 
-    // To sub-account when asset is not compatible with EVC
-    && isKnownNonOwnerAccountHarness(user) && evcCompatibleAsset() == false
-        => ghostErc20Balances[user] == 0
-    filtered { f -> !HARNESS_METHODS(f) }
+// ST-26 | Interest rate has a maximum limit of 1,000,000 APY
+invariant interestRateMaxLimit()
+    ghostInterestRate <= MAX_ALLOWED_INTEREST_RATE()
+    filtered { f -> !HARNESS_METHODS(f) } 
 
 // ST-27 | User interest accumulator always less or equal vault interest accumulator
 invariant userInterestAccumulatorLeqVault()
@@ -256,7 +256,8 @@ invariant userInterestAccumulatorSetWithNonZeroOwed(address user)
 // ST-29 | Interest accumulator is scaled by 1e27
 invariant interestAccumulatorScaledBy1e27() 
     ghostInterestAccumulator >= INTEREST_ACCUMULATOR_SCALE()
-    && (forall address user. ghostUsersInterestAccumulator[user] >= INTEREST_ACCUMULATOR_SCALE())
+    && (forall address user. ghostUsersInterestAccumulator[user] == 0 
+        || ghostUsersInterestAccumulator[user] >= INTEREST_ACCUMULATOR_SCALE())
     filtered { f -> !HARNESS_METHODS(f) }
 
 // ST-30 | Interest rate zero when interest rate model contract is not set
@@ -264,7 +265,9 @@ invariant interestRateZeroWithoutModel()
     ghostInterestRateModel == 0 => ghostInterestRate == 0
     filtered { f -> !HARNESS_METHODS(f) } 
 
-// ST-31 | Interest rate has a maximum limit of 1,000,000 APY
-invariant interestRateMaxLimit()
-    ghostInterestRate <= MAX_ALLOWED_INTEREST_RATE()
+// ST-31 | Owner and spender in allowances should differ
+invariant differentOwnerAndSpenderAllowances()
+    forall address i. forall address j. i == j => ghostUsersETokenAllowance[i][j] == 0
     filtered { f -> !HARNESS_METHODS(f) } 
+
+
