@@ -1,5 +1,5 @@
 rule specificFunctionsModifyState(env e, method f, calldataarg args) 
-    filtered { f -> !HARNESS_METHODS(f) && !f.isView } {
+    filtered { f -> !HARNESS_METHODS(f) } {
     
     storage before = lastStorage;
 

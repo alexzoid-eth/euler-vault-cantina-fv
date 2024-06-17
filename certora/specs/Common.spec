@@ -481,12 +481,9 @@ rule changeUserBorrowChangeVaultAssetBalance(env e, method f, calldataarg args, 
     );
 }
 
-// COM29 | Decrease shares or increase borrows MUST execute ACCOUNT health check and vice versa
+// COM29 | Decrease shares or increase borrows MUST execute ACCOUNT health check
 rule sharesDecreaseOrBorrowsIncreaseExecutesAccountHealthCheck(env e, method f, calldataarg args, address account) 
-    filtered { 
-        // Exclude harness and view functions 
-        f -> !HARNESS_METHODS(f) && !f.isView
-        } {
+    filtered { f -> !HARNESS_VIEW_METHODS(f) } {
 
     // Tested account != address(1)
     require(account != CHECKACCOUNT_CALLER());
@@ -507,12 +504,9 @@ rule sharesDecreaseOrBorrowsIncreaseExecutesAccountHealthCheck(env e, method f, 
     );
 }
 
-// COM30 | Increase shares or increase borrows MUST execute VAULT caps check and vice versa
+// COM30 | Increase shares or increase borrows MUST execute VAULT caps check
 rule sharesIncreaseOrBorrowsIncreaseExecutesVaultHealthCheck(env e, method f, calldataarg args, address account) 
-    filtered { 
-        // Exclude harness and view functions 
-        f -> !HARNESS_METHODS(f) && !f.isView
-        } {
+    filtered { f -> !HARNESS_VIEW_METHODS(f) } {
 
     // Tested account != address(1)
     require(account != CHECKACCOUNT_CALLER());
