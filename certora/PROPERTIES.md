@@ -76,7 +76,7 @@ The properties below are categorized as valid state properties, which can be use
 | ST-23 | When ramping is in progress, the time remaining is always less than or equal to the ramp duration | Valid State | |
 | ST-24 | Config flags limitations | Valid State |  |
 | ST-25 | Transfer assets to zero address not allowed | Valid State | [AssetTransfers/AssetTransfers_0.sol](./mutations/AssetTransfers/AssetTransfers_0.sol) |
-| ST-26 | Interest rate has a maximum limit of 1,000,000 APY |  |
+| ST-26 | Interest rate has a maximum limit of 1,000,000 APY | Valid State |  |
 | ST-27 | User interest accumulator always less or equal vault interest accumulator | Valid State | |
 | ST-28 | User's interest accumulator set when non-zero owed | Valid State |  |
 | ST-29 | Interest accumulator is scaled by 1e27 | Valid State |  |
