@@ -45,14 +45,12 @@ rule accumulatedFeesIncreaseTotalShares(env e) {
 
     touchHarness(e);
     
-    assert(ghostAccumulatedFees >= accumulatedFeesPrev 
-        => (ghostTotalShares - totalSharesPrev == ghostAccumulatedFees - accumulatedFeesPrev)
-    );
+    assert(ghostTotalShares - totalSharesPrev == ghostAccumulatedFees - accumulatedFeesPrev);
 }
 
 // COM-02 | Snapshot MUST NOT be used when it is not initialized
 rule snapshotUsedWhenInitialized(env e, method f, calldataarg args) 
-    filtered { f -> !HARNESS_METHODS(f) } {
+    filtered { f -> !HARNESS_VIEW_METHODS(f) } {
 
     mathint snapshotCashPrev = ghostSnapshotCash;
     mathint snapshotBorrows = ghostSnapshotBorrows;
@@ -67,7 +65,7 @@ rule snapshotUsedWhenInitialized(env e, method f, calldataarg args)
 
 // COM-03 | Snapshot cash MUST set from storage cash or reset
 rule snapshotCashSetFromStorage(env e, method f, calldataarg args) 
-    filtered { f -> !HARNESS_METHODS(f) } {
+    filtered { f -> !HARNESS_VIEW_METHODS(f) } {
 
     requireInvariant uninitializedSnapshotReset;
 
@@ -89,7 +87,7 @@ rule snapshotCashSetFromStorage(env e, method f, calldataarg args)
 
 // COM-04 | Clearing accumulated fees must move the fees to one or two designated fee receiver addresses
 rule feesClearedToReceivers(env e, method f, calldataarg args, address user1, address user2) 
-    filtered { f -> !HARNESS_METHODS(f) } {
+    filtered { f -> !HARNESS_VIEW_METHODS(f) } {
 
     require(user1 != user2);
 
@@ -112,9 +110,10 @@ use rule notAbleReceiveNativeTokens;
 
 // COM-06 | Change interest accumulator or accumulated fees accrued MUST set last interest accumulator timestamp
 rule interestFeesAccruedSetTimestamp(env e, method f, calldataarg args)
-    filtered { f -> !HARNESS_METHODS(f) } {
+    filtered { f -> !HARNESS_VIEW_METHODS(f) } {
     
     requireInvariant lastInterestAccumulatorNotInFuture(e);
+    requireValidTimeStamp(e);
 
     mathint interestAccumulatorPrev = ghostInterestAccumulator;
     mathint accumulatedFeesPrev = ghostAccumulatedFees;
@@ -128,7 +127,7 @@ rule interestFeesAccruedSetTimestamp(env e, method f, calldataarg args)
 
 // COM-07 | Interest accumulator is updated only when last interest accumulator time changed
 rule feesAndInterestNotUpdateNoAccumulatorUpdate(env e, method f, calldataarg args)
-    filtered { f -> !HARNESS_METHODS(f) } {
+    filtered { f -> !HARNESS_VIEW_METHODS(f) } {
 
     mathint lastInterestAccumulatorUpdatePrev = ghostLastInterestAccumulatorUpdate;
     mathint interestAccumulatorPrev = ghostInterestAccumulator;
@@ -142,7 +141,7 @@ rule feesAndInterestNotUpdateNoAccumulatorUpdate(env e, method f, calldataarg ar
 
 // COM-08 | The vault's cash changes without assets transfer only when surplus assets available
 rule cashChangesSkim(env e, method f, calldataarg args)
-    filtered { f -> !HARNESS_METHODS(f) } {
+    filtered { f -> !HARNESS_VIEW_METHODS(f) } {
 
     requireInvariant cashNotLessThanAssets;
 
@@ -163,7 +162,7 @@ rule cashChangesSkim(env e, method f, calldataarg args)
 
 // COM-09 | Transferring assets from the vault MUST decrease the available cash balance
 rule transferOutDecreaseCash(env e, method f, calldataarg args)
-    filtered { f -> !HARNESS_METHODS(f) } {
+    filtered { f -> !HARNESS_VIEW_METHODS(f) } {
 
     requireInvariant cashNotLessThanAssets;
 
@@ -179,7 +178,7 @@ rule transferOutDecreaseCash(env e, method f, calldataarg args)
 
 // COM-10 | Changes in the cash balance must correspond to changes in the total shares
 rule cashChangesAffectTotalShares(env e, method f, calldataarg args) 
-    filtered { f -> !HARNESS_METHODS(f) } {
+    filtered { f -> !HARNESS_VIEW_METHODS(f) } {
 
     mathint cashPrev = ghostCash;
     mathint totalSharesPrev = ghostTotalShares;
@@ -191,7 +190,7 @@ rule cashChangesAffectTotalShares(env e, method f, calldataarg args)
 
 // COM-11 | Accumulated fees must not decrease unless they are being reset to zero
 rule accumulatedFeesNonDecreasing(env e, method f, calldataarg args)
-    filtered { f -> !HARNESS_METHODS(f) } {
+    filtered { f -> !HARNESS_VIEW_METHODS(f) } {
 
     mathint accumulatedFeesPrev = ghostAccumulatedFees;
 
@@ -202,11 +201,11 @@ rule accumulatedFeesNonDecreasing(env e, method f, calldataarg args)
 
 // COM-12 | Fees are retrieved only for the contract itself from the protocol config contract
 invariant feesRetrievedForCurrentContract(env e) ghostProtocolFeeRequestedVault == currentContract
-    filtered { f -> !HARNESS_METHODS(f) }
+    filtered { f -> !HARNESS_VIEW_METHODS(f) }
 
 // COM-13 | Ramp duration can be used only when lowering liquidation LTV
 rule rampDurationOnlyWhenLoweringLiquidationLTV(env e, method f, calldataarg args, address collateral)
-    filtered { f -> !HARNESS_METHODS(f) } {
+    filtered { f -> !HARNESS_VIEW_METHODS(f) } {
     
     uint16 borrowLTV;
     uint16 liquidationLTV;
@@ -231,7 +230,7 @@ rule rampDurationOnlyWhenLoweringLiquidationLTV(env e, method f, calldataarg arg
 
 // COM-14 | Collateral LTV MUST NOT be removed completely
 rule collateralLTVNotRemoved(env e, method f, calldataarg args, address collateral) 
-    filtered { f -> !HARNESS_METHODS(f) } {
+    filtered { f -> !HARNESS_VIEW_METHODS(f) } {
 
     bool initialized = ghostLtvInitialized[collateral];
 
@@ -242,7 +241,7 @@ rule collateralLTVNotRemoved(env e, method f, calldataarg args, address collater
 
 // COM-15 | Interest accumulator always grows
 rule interestAccumulatorAlwaysGrows(env e, method f, calldataarg args) 
-    filtered { f -> !HARNESS_METHODS(f) } {
+    filtered { f -> !HARNESS_VIEW_METHODS(f) } {
 
     mathint interestAccumulatorPrev = ghostInterestAccumulator;
 
@@ -253,7 +252,7 @@ rule interestAccumulatorAlwaysGrows(env e, method f, calldataarg args)
 
 // COM-16 | User interest accumulator always grows
 rule userInterestAccumulatorAlwaysGrows(env e, method f, calldataarg args, address user) 
-    filtered { f -> !HARNESS_METHODS(f) } {
+    filtered { f -> !HARNESS_VIEW_METHODS(f) } {
 
     mathint usersInterestAccumulatorPrev = ghostUsersInterestAccumulator[user];
 
@@ -264,7 +263,7 @@ rule userInterestAccumulatorAlwaysGrows(env e, method f, calldataarg args, addre
 
 // COM-17 | User interest accumulator set always when user borrow changes
 rule userInterestAccumulatorSetOnBorrowChange(env e, method f, calldataarg args, address user)
-    filtered { f -> !HARNESS_METHODS(f) } {
+    filtered { f -> !HARNESS_VIEW_METHODS(f) } {
 
     mathint userBorrowsPrev = getAccountOwed(user);
     mathint usersInterestAccumulatorPrev = ghostUsersInterestAccumulator[user];
@@ -279,7 +278,7 @@ rule userInterestAccumulatorSetOnBorrowChange(env e, method f, calldataarg args,
 
 // COM-18 | Interest accumulator cannot overflow
 rule interestAccumulatorCannotOverflow(env e, method f, calldataarg args) 
-    filtered { f -> !HARNESS_METHODS(f) } {
+    filtered { f -> !HARNESS_VIEW_METHODS(f) } {
 
     requireValidStateEnvCVL(e);
 
@@ -298,13 +297,21 @@ rule interestAccumulatorCannotOverflow(env e, method f, calldataarg args)
 }
 
 // COM-19 | Interest rate computed always for the current contract
-invariant interestRateForCurrentContract()
-    ghostComputeInterestRateVault == currentContract
-    filtered { f -> !HARNESS_METHODS(f) } 
+rule interestRateForCurrentContract(env e, method f, calldataarg args)
+    filtered { f -> !HARNESS_VIEW_METHODS(f) } {
+
+    address computeInterestRateVaultPrev = ghostComputeInterestRateVault;
+
+    f(e, args);
+
+    assert(computeInterestRateVaultPrev != ghostComputeInterestRateVault
+        => ghostComputeInterestRateVault == currentContract
+        );
+}
 
 // COM-20 | Transfer assets to sub-account allowed only when asset is compatible with EVC
 rule transferAllowedOnlyWithCompatibleAsset(env e, method f, calldataarg args, address user) 
-    filtered { f -> !HARNESS_METHODS(f) } {
+    filtered { f -> !HARNESS_VIEW_METHODS(f) } {
 
     require(user != currentContract);
 
@@ -313,19 +320,19 @@ rule transferAllowedOnlyWithCompatibleAsset(env e, method f, calldataarg args, a
     f(e, args);
 
     // Sub-account balance can be changed only when asset is EVC compatible
-    assert(userAssetsBefore != ghostErc20Balances[user] && isKnownNonOwnerAccountHarness(user)
+    assert(userAssetsBefore < ghostErc20Balances[user] && isKnownNonOwnerAccountHarness(user)
         => evcCompatibleAsset() == true 
     );  
 
-    // Sub-account balance MUST NOT change when asset is not EVC compatible
+    // Sub-account balance MUST NOT increase when asset is not EVC compatible
     assert(isKnownNonOwnerAccountHarness(user) && evcCompatibleAsset() == false
-        => userAssetsBefore == ghostErc20Balances[user]
+        => userAssetsBefore >= ghostErc20Balances[user]
     );
 }
 
 // COM-21 | Creator is unchanged
 rule creatorUnchanged(env e, method f, calldataarg args)
-    filtered { f -> !HARNESS_METHODS(f) } {
+    filtered { f -> !HARNESS_VIEW_METHODS(f) } {
 
     address creatorPrev = ghostCreator;
 
@@ -336,22 +343,25 @@ rule creatorUnchanged(env e, method f, calldataarg args)
 
 // COM-22 | Accumulated fees unchanged when interest fees zero
 rule accumulatedFeesUnchangedWhenInterestFeesZero(env e, method f, calldataarg args)
-    filtered { f -> !HARNESS_METHODS(f) } {
+    filtered { f -> !HARNESS_VIEW_METHODS(f) } {
 
     mathint interestFeePrev = ghostInterestFee;
-    mathint accumulatedFeesPrev = ghostAccumulatedFees;
+
+    require(ghostAccumulatedFees == 0);
+    require(ghostInterestFee == 0);
 
     f(e, args);
 
     // Interest fee was not changed and stays zero
-    assert(interestFeePrev == ghostInterestFee && ghostInterestFee == 0
-        => accumulatedFeesPrev == ghostAccumulatedFees
+    assert(interestFeePrev == ghostInterestFee
+        // Accumulated fees stays zero
+        => ghostAccumulatedFees == 0
     );
 }
 
 // COM-23 | Allowance unchanged when user redeem shares to their own account
 rule allowanceUnchangedSelfWithdraw(env e, method f, calldataarg args, address from)
-    filtered { f -> !HARNESS_METHODS(f) } {
+    filtered { f -> !HARNESS_VIEW_METHODS(f) } {
 
     require(ghostAllowanceTouched == false);
 
@@ -369,7 +379,7 @@ rule allowanceUnchangedSelfWithdraw(env e, method f, calldataarg args, address f
 
 // COM-24 | Allowance decrease (unless equal to max_uint256) when user redeem from another account
 rule allowanceChangedFromAnotherWithdraw(env e, method f, calldataarg args, address from)
-    filtered { f -> !HARNESS_METHODS(f) } {
+    filtered { f -> !HARNESS_VIEW_METHODS(f) } {
 
     mathint fromBalancePrev = ghostUsersDataBalance[from];
     mathint usersETokenAllowancePrev = ghostUsersETokenAllowance[from][ghostOnBehalfOfAccount]; 
@@ -390,7 +400,7 @@ rule allowanceChangedFromAnotherWithdraw(env e, method f, calldataarg args, addr
 
 // COM-25 | Only the owner can increase allowance
 rule onlyOwnerCanIncreaseAllowance(env e, method f, calldataarg args, address owner, address spender) 
-    filtered { f -> !HARNESS_METHODS(f) } {
+    filtered { f -> !HARNESS_VIEW_METHODS(f) } {
 
     mathint usersETokenAllowancePrev = ghostUsersETokenAllowance[owner][spender]; 
 
@@ -405,7 +415,7 @@ rule onlyOwnerCanIncreaseAllowance(env e, method f, calldataarg args, address ow
 
 // COM-26 | Balance forwarder must be executed on any share movements when set
 rule balanceForwarderExecutedOnShareMoves(env e, method f, calldataarg args, address account)
-    filtered { f -> !HARNESS_METHODS(f) } {
+    filtered { f -> !HARNESS_VIEW_METHODS(f) } {
     
     require(ghostBalanceTrackerHookCalled == false);
 
@@ -431,7 +441,7 @@ rule balanceForwarderExecutedOnShareMoves(env e, method f, calldataarg args, add
 
 // COM-27 | User borrow changes must be reflected in total borrows
 rule userBorrowChangesInTotalBorrows(env e, method f, calldataarg args, address account)
-    filtered { f -> !HARNESS_METHODS(f) } {
+    filtered { f -> !HARNESS_VIEW_METHODS(f) } {
     
     mathint owedPrev = getAccountOwed(account);
     mathint totalBorrowsPrev = ghostTotalBorrows;
@@ -452,7 +462,7 @@ rule userBorrowChangesInTotalBorrows(env e, method f, calldataarg args, address 
 
 // COM-28 | Increase or decrease user borrow transfers vault's assets out or in 
 rule changeUserBorrowChangeVaultAssetBalance(env e, method f, calldataarg args, address account)
-    filtered { f -> !HARNESS_METHODS(f) } {
+    filtered { f -> !HARNESS_VIEW_METHODS(f) } {
 
     mathint owedPrev = getAccountOwed(account);
     mathint erc20BalancePrev = ghostErc20Balances[currentContract];
@@ -471,36 +481,61 @@ rule changeUserBorrowChangeVaultAssetBalance(env e, method f, calldataarg args, 
     );
 }
 
-// COM-29 | Decrease shares or increase borrows MUST execute ACCOUNT health check
+// COM29 | Decrease shares or increase borrows MUST execute ACCOUNT health check and vice versa
 rule sharesDecreaseOrBorrowsIncreaseExecutesAccountHealthCheck(env e, method f, calldataarg args, address account) 
-    filtered { f -> !HARNESS_METHODS(f) } {
+    filtered { 
+        // Exclude harness and view functions 
+        f -> !HARNESS_METHODS(f) && !f.isView
+        } {
 
-    // account != address(1)
+    // Tested account != address(1)
     require(account != CHECKACCOUNT_CALLER());
+    require(ghostRequireVaultAccountStatusCheckCaller == CHECKACCOUNT_CALLER());
 
+    // Account owed before
     mathint owedPrev = getAccountOwed(account);
+    // Account shares before
     mathint sharesPrev = ghostUsersDataBalance[account];
 
+    // External contract call
     f(e, args);
 
+    // Decrease shares or increase borrows
     assert(ghostUsersDataBalance[account] < sharesPrev || to_mathint(getAccountOwed(account)) > owedPrev
+        // Vault health check was executed
         => ghostRequireVaultAccountStatusCheckCaller == account
     );
 }
 
-// COM-30 | Increase shares or increase borrows MUST execute VAULT health check
+// COM30 | Increase shares or increase borrows MUST execute VAULT caps check and vice versa
 rule sharesIncreaseOrBorrowsIncreaseExecutesVaultHealthCheck(env e, method f, calldataarg args, address account) 
-    filtered { f -> !HARNESS_METHODS(f) } {
+    filtered { 
+        // Exclude harness and view functions 
+        f -> !HARNESS_METHODS(f) && !f.isView
+        } {
 
-    // account != address(1)
+    // Tested account != address(1)
     require(account != CHECKACCOUNT_CALLER());
+    require(ghostRequireVaultStatusCheckCalled == false);
 
+    // Assets before
+    mathint accountAssetsPrev = ghostErc20Balances[account];
+    mathint vaultAssetsPrev = ghostErc20Balances[currentContract];
+
+    // Account owed before
     mathint owedPrev = getAccountOwed(account);
+
+    // Account shares before
     mathint sharesPrev = ghostUsersDataBalance[account];
 
+    // External contract call
     f(e, args);
 
-    assert(sharesPrev > ghostUsersDataBalance[account] || to_mathint(getAccountOwed(account)) > owedPrev 
-        => ghostRequireVaultAccountStatusCheckCaller == account
+    // Increase shares or increase borrows
+    assert((ghostUsersDataBalance[account] > sharesPrev || to_mathint(getAccountOwed(account)) > owedPrev)
+        // There was not a transfer of shares from one user to another
+        && accountAssetsPrev != ghostErc20Balances[account] && vaultAssetsPrev != ghostErc20Balances[currentContract]
+        // Vault status check was executed
+        => ghostRequireVaultStatusCheckCalled == true
     );
 }

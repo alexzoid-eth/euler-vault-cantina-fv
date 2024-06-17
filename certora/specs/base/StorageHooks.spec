@@ -56,7 +56,6 @@ hook Sstore currentContract.snapshot.borrows BaseHarness.Assets val {
 //
 
 persistent ghost mathint ghostSnapshotStamp {
-    // Set in initialize module
     init_state axiom ghostSnapshotStamp == 1;
     axiom ghostSnapshotStamp >= 0 && ghostSnapshotStamp <= max_uint32;
 }

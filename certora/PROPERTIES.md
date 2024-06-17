@@ -10,6 +10,15 @@
 
 **Mutation**: Path to the mutated file used to prove the property
 
+## Violated
+
+List of violated properties.
+
+| Property | Description | Category | Mutation |
+| --- | --- | --- | --- |
+| L1 | protocolFeeShare() displays icorrect value as it doesn't consider 50% limit |  |  |
+| L2 | LTVFull() displays incorrect liquidation LTV |  |  |
+
 ## Common
 
 These properties are global and include invariants and parametric rules, designed to be tested across multiple contracts: `Borrowing`, `Vault` (including `Token`), `Governance`, `Liquidation`, and `RiskManager`. 
@@ -83,81 +92,56 @@ The properties below are categorized as valid state properties, which can be use
 | ST-30 | Interest rate zero when interest rate model contract is not set| Valid State |  |
 | ST-31 | Owner and spender in allowances should differ | Valid State |  |
 
-## Vault_1
+## Vault
 
 | Property | Description | Category | Mutation |
 | --- | --- | --- | --- |
-| VL1-01 | Accumulated fees MUST always be less than or equal to total shares |  |  |
-| VL1-02 | User balance plus accumulated fees MUST always be equal to the total shares (with only 1 user) |  |  |
-| VL1-03 | Sum of three users' balance MUST always be equal to the total shares (with only 3 users) |  |  |
-| VL1-04 | The vault's cash changes MUST be accompanied by assets transfer (when no surplus assets available) |  |  |
-| VL1-05 | Changes in the cash balance MUST correspond to changes in user's shares |  |  |
-| VL1-06 | Snapshot is disabled if both caps are disabled (at low-level set to 0, but resolved to max_uint256) |  |  |
-| VL1-07 | When user deposit assets and redeem shares, all rounding MUST be in favor of vault |  |  |
+| VLT-01 | Accumulated fees MUST always be less than or equal to total shares |  |  |
+| VLT-02 | User balance plus accumulated fees MUST always be equal to the total shares (with only 1 user) |  |  |
+| VLT-03 | Sum of three users' balance MUST always be equal to the total shares (with only 3 users) |  |  |
+| VLT-04 | The vault's cash changes MUST be accompanied by assets transfer (when no surplus assets available) |  |  |
+| VLT-05 | Changes in the cash balance MUST correspond to changes in user's shares |  |  |
+| VLT-06 | Snapshot is disabled if both caps are disabled (at low-level set to 0, but resolved to max_uint256) |  |  |
+| VLT-07 | View functions don't update the state |  |  |
+| VLT-08 | State change functions are protected against reentrancy |  |  |
+| VLT-09 | Anyone can execute view functions |  |  |
+| VLT-10 | Specific view functions are protected against reentrancy, while others are not |  |  |
 
-## Borrowing_1
-
-| Property | Description | Category | Mutation |
-| --- | --- | --- | --- |
-
-## Governance_1
+## Governance
 
 | Property | Description | Category | Mutation |
 | --- | --- | --- | --- |
-| GV1-01 | Only the governor can invoke methods that modify the configuration of the vault |  |  |
-| GV1-02 | Only one governor can exist at one time |  |  |
-| GV1-03 | Governor's ownership can be transferred |  |  |
-| GV1-04 | The ownership could be revoked by setting the governor to zero address |  |  |
-| GV1-05 | The fee receiver address can be changed |  |  |
-| GV1-06 | While distributing fees, external protocol config contract is used |  | [Governance_1/1.sol](./mutations/Governance_1/1.sol) |
-| GV1-07 | Update the protocol (Euler DAO's) receiver and fee amount for the current contract MUST affect the state |  |  |
-| GV1-08 | Update the protocol (Euler DAO's) receiver and fee amount for another contract MUST NOT affect the state |  |  |
-| GV1-09 | The governor fee receiver can be disabled |  |  |
-| GV1-10 | If the governor receiver was not set, the protocol gets all fees |  |  |
-| GV1-11 | Protocol's fee share cannot be more than the max protocol fee share (50%) |  |  |
-| GV1-12 | While distributing fees, total shares MUST NOT change and accumulated fees are cleared |  |  |
-| GV1-13 | While distributing fees, shares are transferred to governor and protocol fee receiver addresses |  |  |
-| GV1-14 | Accumulated fees only increase when some time has passed |  |  |
-| GV1-15 | The LTV can be set for a collateral asset, including borrow LTV, liquidation LTV, and ramp duration |  |  |
-| GV1-16 | LTV can be increased or decreased immediately |  |  |
-| GV1-17 | Initial liquidation LTV is always the previous liquidation LTV or greater than liquidation LTV when ramping |  |  |
-| GV1-18 | Non-governor methods MUST be accessible to any callers |  |  |
+| GOV-01 | Only the governor can invoke methods that modify the configuration of the vault |  |  |
+| GOV-02 | Only one governor can exist at one time |  |  |
+| GOV-03 | Governor's ownership can be transferred |  |  |
+| GOV-04 | The ownership could be revoked by setting the governor to zero address |  |  |
+| GOV-05 | The fee receiver address can be changed |  |  |
+| GOV-06 | While distributing fees, external protocol config contract is used |  | [Governance/1.sol](./mutations/Governance/1.sol) |
+| GOV-07 | View functions MUST NOT be protected against reentrancy |  | [Governance/5.sol](./mutations/Governance/5.sol) |
+| GOV-08 | View functions don't update state |  |  |
+| GOV-09 | The governor fee receiver can be disabled |  |  |
+| GOV-10 | If the governor receiver was not set, the protocol gets all fees |  |  |
+| GOV-11 | Protocol's fee share cannot be more than the max protocol fee share (50%) |  |  |
+| GOV-12 | While distributing fees, total shares MUST NOT change and accumulated fees are cleared |  |  |
+| GOV-13 | While distributing fees, shares are transferred to governor and protocol fee receiver addresses |  |  |
+| GOV-14 | Non-governor methods MUST be accessible to any callers |  |  |
+| GOV-15 | The LTV can be set for a collateral asset, including borrow LTV, liquidation LTV, and ramp duration |  |  |
+| GOV-16 | LTV can be increased or decreased immediately |  |  |
+| GOV-17 | Initial liquidation LTV is always the previous liquidation LTV or greater than liquidation LTV when ramping |  |  |
+| GOV-18 | Specific functions can modify state |  | [Governance/2.sol](./mutations/Governance/2.sol) |
+| GOV-19 | Possibility of modifying state |  |  |
+| GOV-20 | State change functions are protected against reentrancy |  | [Governance/3.sol](./mutations/Governance/3.sol) |
+| GOV-21 | Anyone can execute view functions |  | [Governance/6.sol](./mutations/Governance/6.sol) |
 
-## RiskManager_1
-
-| Property | Description | Category | Mutation |
-| --- | --- | --- | --- |
-| RM1-01 | Total shares and total borrows limitations | | |
-
-## Liquidation_1
+## RiskManager
 
 | Property | Description | Category | Mutation |
 | --- | --- | --- | --- |
-| LQ-1 | Liquidation operations are prohibited until the cool-down period has passed |  |  |
+| RM-01 | Total shares and total borrows limitations | | |
 
-## Funcs
-
-These properties test the execution behavior common to all contracts. Each specification corresponds to a specific contract and includes properties relevant to its functionality.
-
-### Vault_Funcs
+## Liquidation
 
 | Property | Description | Category | Mutation |
 | --- | --- | --- | --- |
-| VLF-01 | Specific functions require a vault status check |  |  |
-| VLF-02 | Specific functions require a vault and account status check |  |  |
-| VLF-05 | State change functions are protected against reentrancy |  |  |
-| VLF-07 | Anyone can execute view functions |  |  |
-| VLF-08 | Specific view functions are protected against reentrancy, while others are not |  |  |
-| VLF-10 | View functions don't update the state |  |  |
-
-### Governance_Funcs
-
-| Property | Description | Category | Mutation |
-| --- | --- | --- | --- |
-| GVF-01 | Specific functions can modify state |  | [Governance_Funcs/1.sol](./mutations/Governance_Funcs/1.sol) |
-| GVF-02 | Possibility of modifying state |  |  |
-| GVF-03 | Specific functions require a vault status check |  | [Governance_Funcs/2.sol](./mutations/Governance_Funcs/2.sol) |
-| GVF-04 | State change functions are protected against reentrancy |  | [Governance_Funcs/3.sol](./mutations/Governance_Funcs/3.sol) |
-| GVF-05 | Anyone can execute view functions |  | [Governance_Funcs/6.sol](./mutations/Governance_Funcs/6.sol) |
-| GVF-06 | View functions MUST NOT be protected against reentrancy |  | [Governance_Funcs/5.sol](./mutations/Governance_Funcs/5.sol) |
-| GVF-07 | View functions don't update state |  |  |
+| LIQ-01 | Liquidation operations are prohibited until the cool-down period has passed |  |  |
+| LIQ-02 | Check liquidation healthy |  |  |

@@ -1,10 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-
 pragma solidity ^0.8.0;
 
-import {IEVC} from "ethereum-vault-connector/interfaces/IEthereumVaultConnector.sol";
 import "../../src/EVault/shared/Base.sol";
-import "../../src/EVault/modules/Initialize.sol";
 
 // This exists so that Base.LTVConfig and other type declarations 
 // are available in CVL and can be used across specs for different modules.
@@ -12,10 +9,30 @@ import "../../src/EVault/modules/Initialize.sol";
 // so that we can refer to Base.LTVConfig as a type in shared CVL functions
 // while also making function definitions sharable among harnesses via
 // AbstractBase. AbstractBaseHarness includes the shared function definitions.
-abstract contract AbstractBaseHarness is InitializeModule  {
+abstract contract AbstractBaseHarness is Base {
 
     constructor() {
-        initialize(msg.sender);
+        vaultStorage.interestAccumulator = 1e27;
+        snapshot.reset();
+    }
+
+    function updateVault() internal override virtual returns (VaultCache memory vaultCache) {
+        // initVaultCache is difficult to summarize because we can't
+        // reason about the pass-by-value VaultCache at the start and
+        // end of the call as separate values. So this harness
+        // gives us a way to keep the loadVault summary when updateVault
+        // is called
+        vaultCache = loadVault();
+        if(block.timestamp - vaultCache.lastInterestAccumulatorUpdate > 0) {
+            vaultStorage.lastInterestAccumulatorUpdate = vaultCache.lastInterestAccumulatorUpdate;
+            vaultStorage.accumulatedFees = vaultCache.accumulatedFees;
+
+            vaultStorage.totalShares = vaultCache.totalShares;
+            vaultStorage.totalBorrows = vaultCache.totalBorrows;
+
+            vaultStorage.interestAccumulator = vaultCache.interestAccumulator;
+        }
+        return vaultCache;
     }
 
     function LTVFullHarness(address collateral) public view returns (uint16, uint16, uint16, uint48, uint32) {
@@ -53,56 +70,11 @@ abstract contract AbstractBaseHarness is InitializeModule  {
         return vaultStorage.users[account].getOwed().toUint();
     }
 
-    function borrowsToAssetsUp(uint256 amount) public returns (uint256) {
-        return TypesLib.toAssets(OwedLib.toAssetsUpUint(amount)).toUint();
-    }
-
-    function vaultCacheOracleConfigured() external returns (bool) {
-        return address(loadVault().oracle) != address(0);
-    }
-
-    function isAccountStatusCheckDeferredExt(address account) external view returns (bool) {
-        return isAccountStatusCheckDeferred(account);
-    }
-    
-    function getBalance(address account) public returns (uint256) {
-        (Shares shares, ) = vaultStorage.users[account].getBalanceAndBalanceForwarder();
-        return shares.toUint();
-    }
-
     function isBalanceAndBalanceEnabled(address account) public returns (bool) {
         (, bool enabled) = vaultStorage.users[account].getBalanceAndBalanceForwarder();
         return enabled;
     }
 
-
-    //--------------------------------------------------------------------------
-    // Controllers
-    //--------------------------------------------------------------------------
-    function vaultIsOnlyController(address account) external view returns (bool) {
-        address[] memory controllers = IEVC(evc).getControllers(account);
-        return controllers.length == 1 && controllers[0] == address(this);
-    }
-
-    function vaultIsController(address account) external view returns (bool) {
-        return IEVC(evc).isControllerEnabled(account, address(this));
-    }
-
-    //--------------------------------------------------------------------------
-    // Collaterals
-    //--------------------------------------------------------------------------
-    function getCollateralsExt(address account) public view returns (address[] memory) {
-        return getCollaterals(account);
-    }
-
-    function isCollateralEnabledExt(address account, address market) external view returns (bool) {
-        return isCollateralEnabled(account, market);
-    }
-
-
-    //--------------------------------------------------------------------------
-    // Operation disable checks
-    //--------------------------------------------------------------------------
     function isOperationDisabledExt(uint32 operation) public returns (bool) {
         VaultCache memory vaultCache = updateVault();
         return isOperationDisabled(vaultCache.hookedOps, operation);
@@ -128,33 +100,10 @@ abstract contract AbstractBaseHarness is InitializeModule  {
         return isOperationDisabledExt(OP_SKIM);
     }
 
-
-    //--------------------------------------------------------------------------
-    // Storage viewers
-    //--------------------------------------------------------------------------
-    function reentrancyLocked() public view returns (bool) {
-        return vaultStorage.reentrancyLocked;
-    }
-
-    function hookTarget() public view returns (address) {
-        return vaultStorage.hookTarget;
-    }
-
-    function totalShares() public returns (uint256) {
-        VaultCache memory vaultCache = updateVault();
-        return vaultCache.totalShares.toUint();
-    }
-
-    //--------------------------------------------------------------------------
-    // Hooks set checks
-    //--------------------------------------------------------------------------
     function isHookNotSetConvertFees() public view returns (bool) {
         return vaultStorage.hookedOps.isNotSet(OP_CONVERT_FEES);
     }
 
-    //--------------------------------------------------------------------------
-    // Utils
-    //--------------------------------------------------------------------------
     function collateralExists(address collateral) public view returns (bool) {
         uint256 length = vaultStorage.ltvList.length;
         for (uint256 i; i < length; ++i) {
@@ -169,43 +118,10 @@ abstract contract AbstractBaseHarness is InitializeModule  {
         return vaultStorage.ltvList.length;
     }
 
-    // VaultStorage Accessors:
-    function storage_lastInterestAccumulatorUpdate() public view returns (uint48) {
-        return vaultStorage.lastInterestAccumulatorUpdate;
-    }
-    function storage_cash() public view returns (Assets) {
-        return vaultStorage.cash;
-    }
     function storage_supplyCap() public view returns (uint256) {
         return vaultStorage.supplyCap.resolve();
     }
     function storage_borrowCap() public view returns (uint256) {
         return vaultStorage.borrowCap.resolve();
-    }
-    // reentrancyLocked seems not direclty used in loadVault
-    function storage_hookedOps() public view returns (Flags) {
-        return vaultStorage.hookedOps;
-    }
-    function storage_snapshotInitialized() public view returns (bool) {
-        return vaultStorage.snapshotInitialized;
-    }
-    function storage_totalShares() public view returns (Shares) {
-        return vaultStorage.totalShares;
-    }
-    function storage_totalBorrows() public view returns (Owed) {
-        return vaultStorage.totalBorrows;
-    }
-    function storage_accumulatedFees() public view returns (Shares) {
-        return vaultStorage.accumulatedFees;
-    }
-    function storage_interestAccumulator() public view returns (uint256) {
-        return vaultStorage.interestAccumulator;
-    }
-    function storage_configFlags() public view returns (Flags) {
-        return vaultStorage.configFlags;
-    }
-
-    function cache_cash() public view returns (Assets) {
-        return loadVault().cash;
     }
 }

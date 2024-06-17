@@ -1,6 +1,6 @@
-import "./base/Governance.spec";
+import "./base/Base.spec";
 
-// LTVFull() displays incorrect liquidation LTV
+// L2 | LTVFull() displays incorrect liquidation LTV
 rule correctnessLTVFull(env e, address collateral) {
 
     uint16 borrowLTV;

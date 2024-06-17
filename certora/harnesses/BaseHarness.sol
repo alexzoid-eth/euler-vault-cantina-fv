@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
-
 pragma solidity ^0.8.0;
 
 import "../../src/EVault/shared/Base.sol";
@@ -11,6 +10,6 @@ import "../../certora/harnesses/AbstractBaseHarness.sol";
 // so that we can refer to Base.LTVConfig as a type in shared CVL functions
 // while also making function definitions sharable among harnesses via
 // AbstractBase.
-contract BaseHarness is Base, AbstractBaseHarness {
+contract BaseHarness is AbstractBaseHarness {
     constructor(Integrations memory integrations) Base(integrations) {}
 }

@@ -1,5 +1,5 @@
 rule specificFunctionsModifyState(env e, method f, calldataarg args) 
-    filtered { f -> !HARNESS_METHODS(f) } {
+    filtered { f -> !HARNESS_METHODS(f) && !f.isView } {
     
     storage before = lastStorage;
 
@@ -23,9 +23,9 @@ rule modifyStatePossibility(env e, method f, calldataarg args)
 }
 
 rule stateChangeFunctionsReentrancyProtected(env e, method f, calldataarg args) 
-    filtered { f -> !HARNESS_METHODS(f) } {
+    filtered { f -> !HARNESS_METHODS(f) && !f.isView } {
 
-    bool locked = reentrancyLocked();
+    bool locked = ghostReentrancyLocked;
 
     storage before = lastStorage;
 
@@ -50,9 +50,9 @@ rule anyoneCanExecuteViewFunctions(env e1, env e2, method f, calldataarg args)
     reentrantViewSenderRequirementCVL(e1);
     reentrantViewSenderRequirementCVL(e2);
 
-    require(e1.msg.value == e2.msg.value);
     require(e1.block.timestamp == e2.block.timestamp);
 
+    require(e1.msg.value == 0 && e2.msg.value == 0);
     require(e1.msg.sender != e2.msg.sender);
 
     storage init = lastStorage;
@@ -68,11 +68,11 @@ rule anyoneCanExecuteViewFunctions(env e1, env e2, method f, calldataarg args)
 } 
 
 rule viewFunctionsNotProtectedAgainstReentrancy(env e, method f, calldataarg args) 
-    filtered { f -> f.isView  && !HARNESS_METHODS(f) } {
+    filtered { f -> f.isView && !HARNESS_METHODS(f) } {
 
     reentrantViewSenderRequirementCVL(e);
 
-    require(reentrancyLocked());
+    require(ghostReentrancyLocked);
 
     f@withrevert(e, args);
 
@@ -85,7 +85,7 @@ rule specificViewFunctionsProtectedAgainstReentrancy(env e, method f, calldataar
 
     reentrantViewSenderRequirementCVL(e);
 
-    require(reentrancyLocked());
+    require(ghostReentrancyLocked);
 
     f@withrevert(e, args);
     bool reverted = lastReverted;

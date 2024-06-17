@@ -1,7 +1,12 @@
-import "./base/Vault.spec";
+import "./base/methods/VaultMethods.spec";
+import "./base/Base.spec";
 import "./common/State.spec";
+import "./common/Funcs.spec";
 
-// VL1-01 | Accumulated fees must always be less than or equal to total shares
+use builtin rule sanity;
+use builtin rule msgValueInLoopRule;
+
+// VLT-01 | Accumulated fees must always be less than or equal to total shares
 invariant accumulatedFeesLeqShares(address user) 
     ghostAccumulatedFees <= ghostTotalShares
     filtered { f -> !HARNESS_METHODS(f) } {
@@ -14,7 +19,7 @@ invariant accumulatedFeesLeqShares(address user)
         }
     }
 
-// VL1-02 | User balance plus accumulated fees must always be equal to the total shares (with only 1 user)
+// VLT-02 | User balance plus accumulated fees must always be equal to the total shares (with only 1 user)
 function userBalanceEqualTotalSharesReqCVL(address user) {
     // Balance of any other addresses are zero
     require(forall address u. u != user => ghostUsersDataBalance[u] == 0);
@@ -54,7 +59,7 @@ invariant userBalanceEqualTotalShares(address user)
     }
 }
 
-// VL1-03 | Sum of three users' balance must always be equal to the total shares (with only 3 users)
+// VLT-03 | Sum of three users' balance must always be equal to the total shares (with only 3 users)
 function sumOfUsersBalanceEqualTotalSharesReqCVL(address user1, address user2, address user3) {
     // Balance of any other addresses are zero
     require(forall address u. u != user1 && u != user2 && u != user3 => ghostUsersDataBalance[u] == 0);
@@ -95,13 +100,10 @@ invariant sumOfUsersBalanceEqualTotalShares(address user1, address user2, addres
     }
 }
 
-// VL1-04 | The vault's cash changes must be accompanied by assets transfer (when no surplus assets available)
+// VLT-04 | The vault's cash changes must be accompanied by assets transfer (when no surplus assets available)
 rule cashChangesWithTransfer(env e, method f, calldataarg args)
     filtered { f -> !HARNESS_METHODS(f) } {
     
-    // No surplus assets available
-    require(ghostErc20Balances[currentContract] == ghostCash);
-
     mathint cashPrev = ghostCash;
     mathint erc20BalancePrev = ghostErc20Balances[currentContract];
 
@@ -116,7 +118,10 @@ rule cashChangesWithTransfer(env e, method f, calldataarg args)
         f(e, args);
     }
 
-    assert(ghostCash != cashPrev => (ghostCash > cashPrev
+    // No surplus assets were available
+    assert(erc20BalancePrev == cashPrev 
+        // Cash was changed
+        && ghostCash != cashPrev => (ghostCash > cashPrev
         // Cash increase => tokens were transferred to the current contract
         ? ghostErc20Balances[currentContract] - erc20BalancePrev == ghostCash - cashPrev
         // Cash decrease => tokens were transferred out form the current contract
@@ -125,7 +130,7 @@ rule cashChangesWithTransfer(env e, method f, calldataarg args)
     );
 }
 
-// VL1-05 | Changes in the cash balance must correspond to changes in user's shares
+// VLT-05 | Changes in the cash balance must correspond to changes in user's shares
 rule cashChangesAffectUserShares(env e, method f, calldataarg args, address user) 
     filtered { f -> !HARNESS_METHODS(f) } {
 
@@ -154,31 +159,21 @@ rule cashChangesAffectUserShares(env e, method f, calldataarg args, address user
     ));
 }
 
-// VL1-06 | Snapshot is disabled if both caps are disabled (at low-level set to 0, but resolved to max_uint256)
+// VLT-06 | Snapshot is disabled if both caps are disabled (at low-level set to 0, but resolved to max_uint256)
 invariant snapshotDisabledWithBothCapsDisabled() 
     ghostSupplyCap == 0 && ghostBorrowCap == 0 => ghostSnapshotInitialized == false
     filtered { f -> !HARNESS_METHODS(f) }
 
-// VL1-07 | When user deposit assets and redeem shares, all rounding MUST be in favor of vault
-rule roundingFavorsVaultOnDepositRedeem(env e, address user) {
+// VLT-07 | View functions don't update the state
+use rule viewFunctionsDontUpdateState;
 
-    // Require valid storage
-    requireValidStateEnvCVL(e);
+// VLT-08 | State change functions are protected against reentrancy
+use rule stateChangeFunctionsReentrancyProtected;
 
-    // User is authenticated account
-    require(user == ghostOnBehalfOfAccount);
+// VLT-09 | Anyone can execute view functions
+use rule anyoneCanExecuteViewFunctions;
 
-    // Amount of assets before
-    mathint balanceBefore = ghostErc20Balances[user];
+// VLT-10 | Specific view functions are protected against reentrancy, while others are not
+use rule specificViewFunctionsProtectedAgainstReentrancy;
 
-    // Input assets
-    uint256 sharesOut;
-    uint256 assetsIn;
-    sharesOut = deposit(e, assetsIn, user);
 
-    // Output assets
-    redeem(e, sharesOut, user, user);
-
-    // User's assets MUST not grow in one block
-    assert(balanceBefore >= ghostErc20Balances[user]);
-}

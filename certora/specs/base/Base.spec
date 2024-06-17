@@ -150,7 +150,7 @@ definition MAX_PROTOCOL_FEE_SHARE() returns mathint = 5 * 10^3;
 // max interest rate accepted from IRM. 1,000,000% APY: floor(((1000000 / 100 + 1)**(1/(86400*365.2425)) - 1) * 1e27)
 definition MAX_ALLOWED_INTEREST_RATE() returns mathint = 291867278914945094175;
 
-definition INTEREST_ACCUMULATOR_SCALE() returns mathint = 1^27;
+definition INTEREST_ACCUMULATOR_SCALE() returns mathint = 10^27;
 
 definition CONFIG_SCALE() returns mathint = 10^4;
 definition MAX_SANE_AMOUNT() returns mathint = max_uint112;
@@ -243,7 +243,8 @@ function getCurrentOnBehalfOfAccountCVL(address controllerToCheck) returns (addr
     // for safety, EVC reverts if no account has been authenticated
     require(ghostOnBehalfOfAccount != 0);
     require(ghostOnBehalfOfAccount != currentContract);
-    return (ghostOnBehalfOfAccount, controllerToCheck == 0 => ghostControllerEnabled == false);
+    require(controllerToCheck == 0 => ghostControllerEnabled == false);
+    return (ghostOnBehalfOfAccount, ghostControllerEnabled);
 }
 
 persistent ghost mathint ghostLastAccountStatusCheckTimestamp;
@@ -275,7 +276,7 @@ function reentrantViewSenderRequirementCVL(env e) {
     // when the view function is inlined in the EVault.sol or the hook target should be taken from the trailing
     // data appended by the delegateToModuleView function used by useView modifier. In the latter case, it is
     // safe to consume the trailing data as we know we are inside useView because msg.sender == address(this)
-    require(e.msg.sender != hookTarget());
+    require(e.msg.sender != ghostHookTarget);
     require(e.msg.sender != currentContract);
 }
 
