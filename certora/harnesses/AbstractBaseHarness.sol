@@ -100,8 +100,8 @@ abstract contract AbstractBaseHarness is Base {
         return isOperationDisabledExt(OP_SKIM);
     }
 
-    function isHookNotSetConvertFees() public view returns (bool) {
-        return vaultStorage.hookedOps.isNotSet(OP_CONVERT_FEES);
+    function isHookNotSet(uint32 flag) public view returns (bool) {
+        return vaultStorage.hookedOps.isNotSet(flag);
     }
 
     function collateralExists(address collateral) public view returns (bool) {
@@ -123,5 +123,9 @@ abstract contract AbstractBaseHarness is Base {
     }
     function storage_borrowCap() public view returns (uint256) {
         return vaultStorage.borrowCap.resolve();
+    }
+
+    function getEVC() public view returns (address) {
+        return address(evc);
     }
 }

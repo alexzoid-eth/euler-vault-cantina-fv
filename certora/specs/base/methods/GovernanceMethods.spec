@@ -94,4 +94,16 @@ definition GOVERNOR_ONLY_METHODS(method f) returns bool =
     || f.selector == sig:setCaps(uint16,uint16).selector
     || f.selector == sig:setInterestFee(uint16).selector;    
 
-definition HARNESS_METHODS(method f) returns bool = GOVERNANCE_HARNESS_METHODS(f);
+definition HARNESS_METHODS(method f) returns bool 
+    = GOVERNANCE_HARNESS_METHODS(f);
+
+function functionOperationCVL(method f) returns mathint {
+    if(f.selector == sig:convertFees().selector) {
+        return OP_CONVERT_FEES();
+    } else {
+        return 0;
+    }
+}
+
+definition HOOK_METHODS(method f) returns bool = 
+    f.selector == sig:convertFees().selector;

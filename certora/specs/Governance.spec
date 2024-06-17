@@ -268,3 +268,11 @@ use rule stateChangeFunctionsReentrancyProtected;
 // GOV-21 | Anyone can execute view functions
 use rule anyoneCanExecuteViewFunctions;
 
+// GOV-22 | Hook execution allowance
+use rule hookExecutionAllowance;
+
+// GOV-23 | Hook execution possibility
+use rule hookExecutionPossibility;
+
+// GOV-24 | Hook execution restriction
+use rule hookExecutionRestriction;

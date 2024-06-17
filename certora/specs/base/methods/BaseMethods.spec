@@ -14,11 +14,12 @@ methods {
     function isWithdrawDisabled() external returns (bool);
     function isRedeemDisabled() external returns (bool);
     function isSkimDisabled() external returns (bool);
-    function isHookNotSetConvertFees() external returns (bool) envfree;
+    function isHookNotSet(uint32 flag) external returns (bool) envfree;
     function collateralExists(address collateral) external returns (bool) envfree;
     function ltvListLength() external returns (uint256) envfree;
     function storage_supplyCap() external returns (uint256) envfree;
     function storage_borrowCap() external returns (uint256) envfree;
+    function getEVC() external returns (address) envfree;
 }
 
 definition BASE_HARNESS_METHODS(method f) returns bool = 
@@ -36,11 +37,13 @@ definition BASE_HARNESS_METHODS(method f) returns bool =
     || f.selector == sig:isWithdrawDisabled().selector
     || f.selector == sig:isRedeemDisabled().selector
     || f.selector == sig:isSkimDisabled().selector
-    || f.selector == sig:isHookNotSetConvertFees().selector
+    || f.selector == sig:isHookNotSet(uint32).selector
     || f.selector == sig:collateralExists(address).selector
     || f.selector == sig:ltvListLength().selector
     || f.selector == sig:storage_supplyCap().selector
     || f.selector == sig:storage_borrowCap().selector
+    || f.selector == sig:getEVC().selector
     ;
 
-definition HARNESS_VIEW_METHODS(method f) returns bool = HARNESS_METHODS(f) || f.isView;
+definition HARNESS_VIEW_METHODS(method f) returns bool 
+    = HARNESS_METHODS(f) || f.isView;

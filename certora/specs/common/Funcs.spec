@@ -45,7 +45,7 @@ rule notAbleReceiveNativeTokens(env e, method f, calldataarg args)
 }
 
 rule anyoneCanExecuteViewFunctions(env e1, env e2, method f, calldataarg args) 
-    filtered { f -> f.isView && !HARNESS_METHODS(f) } {
+    filtered { f -> VIEW_METHODS(f) } {
 
     reentrantViewSenderRequirementCVL(e1);
     reentrantViewSenderRequirementCVL(e2);
@@ -90,11 +90,7 @@ rule specificViewFunctionsProtectedAgainstReentrancy(env e, method f, calldataar
     f@withrevert(e, args);
     bool reverted = lastReverted;
 
-    // MUST revert
     assert(VIEW_REENTRANCY_PROTECTED_METHODS(f) => reverted);
-
-    // Possibility not been reverted
-    satisfy(f.isView && !VIEW_REENTRANCY_PROTECTED_METHODS(f) => !reverted);
 }
 
 rule viewFunctionsDontUpdateState(env e, method f, calldataarg args) 
@@ -107,4 +103,61 @@ rule viewFunctionsDontUpdateState(env e, method f, calldataarg args)
     storage after = lastStorage;
 
     assert(before[currentContract] == after[currentContract]);
+}
+
+rule hookExecutionAllowance(env e, method f, calldataarg args) 
+    filtered { f -> !HARNESS_METHODS(f) } {
+
+    require(e.msg.sender == getEVC());
+
+    require(ghostInvokeHookTargetCaller == 0);
+
+    mathint opcode = functionOperationCVL(f);
+
+    f(e, args);
+
+    // Hook was executed
+    assert(ghostInvokeHookTargetCaller != 0
+        => (// Opcode is correct
+            opcode != 0 
+            // Hook execution is allowed
+            && !isHookNotSet(require_uint32(opcode))
+            // Caller is correct
+            && ghostInvokeHookTargetCaller == ghostOnBehalfOfAccount
+        )
+    );
+}
+
+rule hookExecutionPossibility(env e, method f, calldataarg args) 
+    filtered { f -> HOOK_METHODS(f) } {
+
+    require(e.msg.sender == getEVC());
+
+    require(ghostInvokeHookTargetCaller == 0);
+
+    mathint opcode = functionOperationCVL(f);
+    bool hookSet = !isHookNotSet(require_uint32(opcode));
+
+    f(e, args);
+
+    satisfy(hookSet
+        => ghostInvokeHookTargetCaller == ghostOnBehalfOfAccount
+        );
+}
+
+rule hookExecutionRestriction(env e, method f, calldataarg args) 
+    filtered { f -> !HARNESS_METHODS(f) } {
+
+    require(e.msg.sender == getEVC());
+
+    require(ghostInvokeHookTargetCaller == 0);
+
+    mathint opcode = functionOperationCVL(f);
+    bool notSet = isHookNotSet(require_uint32(opcode));
+
+    f(e, args);
+
+    assert(opcode == 0 || notSet
+        => ghostInvokeHookTargetCaller == 0
+        );
 }

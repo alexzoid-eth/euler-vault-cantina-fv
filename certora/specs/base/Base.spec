@@ -33,7 +33,8 @@ methods {
     function _.hasAnyControllerEnabled(address caller) internal 
         => hasAnyControllerEnabledCVL(caller) expect bool;
 
-    function _.invokeHookTarget(address caller) internal => NONDET;
+    function _.invokeHookTarget(address caller) internal
+        => invokeHookTargetCVL(caller) expect void;
     function _.calculateDTokenAddress() internal => NONDET;
 
     //
@@ -170,6 +171,22 @@ definition OWED_MASK() returns uint256 = 0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0
 definition OWED_OFFSET() returns uint256 = 112;
 definition OWED_FROM_DATA(uint256 data) returns uint256 = (data & OWED_MASK()) >> OWED_OFFSET();
 
+definition OP_DEPOSIT() returns mathint = 1 << 0;
+definition OP_MINT() returns mathint = 1 << 1;
+definition OP_WITHDRAW() returns mathint = 1 << 2;
+definition OP_REDEEM() returns mathint = 1 << 3;
+definition OP_TRANSFER() returns mathint = 1 << 4;
+definition OP_SKIM() returns mathint = 1 << 5;
+definition OP_BORROW() returns mathint = 1 << 6;
+definition OP_REPAY() returns mathint = 1 << 7;
+definition OP_REPAY_WITH_SHARES() returns mathint = 1 << 8;
+definition OP_PULL_DEBT() returns mathint = 1 << 9;
+definition OP_CONVERT_FEES() returns mathint = 1 << 10;
+definition OP_LIQUIDATE() returns mathint = 1 << 11;
+definition OP_FLASHLOAN() returns mathint = 1 << 12;
+definition OP_TOUCH() returns mathint = 1 << 13;
+definition OP_VAULT_STATUS_CHECK() returns mathint = 1 << 14;
+
 function requireValidTimeStamp(env e) {
     require(e.block.timestamp > 0);
     // There is a safe accumption limit timestamp to 3000 year
@@ -195,6 +212,11 @@ function CVLGetQuotes(uint256 amount, address base, address quote) returns (uint
         CVLGetQuote(amount, base, quote),
         CVLGetQuote(amount, base, quote)
     );
+}
+
+persistent ghost address ghostInvokeHookTargetCaller;
+function invokeHookTargetCVL(address caller) {
+    ghostInvokeHookTargetCaller = caller;
 }
 
 persistent ghost bool ghostIsControlCollateralInProgress;

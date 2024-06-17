@@ -173,7 +173,20 @@ use rule stateChangeFunctionsReentrancyProtected;
 // VLT-09 | Anyone can execute view functions
 use rule anyoneCanExecuteViewFunctions;
 
-// VLT-10 | Specific view functions are protected against reentrancy, while others are not
+// VLT-10 | Specific view functions are protected against reentrancy
 use rule specificViewFunctionsProtectedAgainstReentrancy;
 
+// VLT-11 | Specific functions can modify state
+use rule specificFunctionsModifyState;
 
+// VLT-12 | Possibility of modifying state
+use rule modifyStatePossibility;
+
+// VLT-13 | Hook execution allowance
+use rule hookExecutionAllowance;
+
+// VLT-14 | Hook execution possibility
+use rule hookExecutionPossibility;
+
+// VLT-15 | Hook execution restriction
+use rule hookExecutionRestriction;

@@ -21,8 +21,56 @@ methods {
     function touch() external;
 }
 
+definition VIEW_REENTRANCY_PROTECTED_METHODS(method f) returns bool = 
+    f.selector == sig:totalBorrows().selector
+    || f.selector == sig:totalBorrowsExact().selector
+    || f.selector == sig:cash().selector
+    || f.selector == sig:debtOf(address).selector
+    || f.selector == sig:debtOfExact(address).selector
+    || f.selector == sig:interestRate().selector
+    || f.selector == sig:interestAccumulator().selector;
+
+definition VIEW_METHODS(method f) returns bool = 
+    VIEW_REENTRANCY_PROTECTED_METHODS(f)
+    || f.selector == sig:dToken().selector;
+
+definition MODIFY_STATE_METHODS(method f) returns bool = 
+    f.selector == sig:borrow(uint256,address).selector
+    || f.selector == sig:repay(uint256,address).selector
+    || f.selector == sig:repayWithShares(uint256,address).selector
+    || f.selector == sig:pullDebt(uint256,address).selector
+    // || f.selector == sig:flashLoan(uint256,bytes).selector
+    || f.selector == sig:touch().selector;
+
 definition BORROWING_HARNESS_METHODS(method f) returns bool = 
     BASE_HARNESS_METHODS(f)
     ;
 
-definition HARNESS_METHODS(method f) returns bool = BORROWING_HARNESS_METHODS(f);
+definition HARNESS_METHODS(method f) returns bool 
+    = BORROWING_HARNESS_METHODS(f);
+
+function functionOperationCVL(method f) returns mathint {
+    if(f.selector == sig:borrow(uint256,address).selector) {
+        return OP_BORROW();
+    } else if(f.selector == sig:repay(uint256,address).selector) {
+        return OP_REPAY();
+    } else if(f.selector == sig:repayWithShares(uint256,address).selector) {
+        return OP_REPAY_WITH_SHARES();
+    } else if(f.selector == sig:pullDebt(uint256,address).selector) {
+        return OP_PULL_DEBT();
+    } else if(f.selector == sig:flashLoan(uint256,bytes).selector) {
+        return OP_FLASHLOAN();
+    } else if(f.selector == sig:touch().selector) {
+        return OP_TOUCH();
+    } else {
+        return 0;
+    }
+}
+
+definition HOOK_METHODS(method f) returns bool = 
+    f.selector == sig:borrow(uint256,address).selector
+    || f.selector == sig:repay(uint256,address).selector
+    || f.selector == sig:repayWithShares(uint256,address).selector
+    || f.selector == sig:pullDebt(uint256,address).selector
+    || f.selector == sig:flashLoan(uint256,bytes).selector
+    || f.selector == sig:touch().selector;

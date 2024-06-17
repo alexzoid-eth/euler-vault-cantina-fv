@@ -86,4 +86,33 @@ definition OUTPUT_METHODS(method f) returns bool =
     f.selector == sig:withdraw(uint256,address,address).selector
     || f.selector == sig:redeem(uint256,address,address).selector;
 
-definition HARNESS_METHODS(method f) returns bool = VAULT_HARNESS_METHODS(f);
+definition HARNESS_METHODS(method f) returns bool 
+    = VAULT_HARNESS_METHODS(f);
+
+function functionOperationCVL(method f) returns mathint {
+    if(f.selector == sig:deposit(uint256,address).selector) {
+        return OP_DEPOSIT();
+    } else if(f.selector == sig:mint(uint256,address).selector) {
+        return OP_MINT();
+    } else if(f.selector == sig:withdraw(uint256,address,address).selector) {
+        return OP_WITHDRAW();
+    } else if(f.selector == sig:redeem(uint256,address,address).selector) {
+        return OP_REDEEM();
+    } else if(f.selector == sig:skim(uint256,address).selector) {
+        return OP_SKIM();
+    } else if(f.selector == sig:transfer(address,uint256).selector
+        || f.selector == sig:transferFromMax(address,address).selector
+        || f.selector == sig:transferFrom(address,address,uint256).selector
+        ) {
+        return OP_TRANSFER();
+    } else {
+        return 0;
+    }
+}
+
+definition HOOK_METHODS(method f) returns bool = 
+    f.selector == sig:deposit(uint256,address).selector
+    || f.selector == sig:mint(uint256,address).selector
+    || f.selector == sig:withdraw(uint256,address,address).selector
+    || f.selector == sig:redeem(uint256,address,address).selector
+    || f.selector == sig:skim(uint256,address).selector;
