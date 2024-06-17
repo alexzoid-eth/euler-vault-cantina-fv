@@ -1,6 +1,7 @@
+import "./base/methods/GovernanceMethods.spec";
 import "./base/Base.spec";
 
-// L2 | LTVFull() displays incorrect liquidation LTV
+// L2 | `LTVFull()` displays incorrect liquidation LTV, does not consider ramping
 rule correctnessLTVFull(env e, address collateral) {
 
     uint16 borrowLTV;
