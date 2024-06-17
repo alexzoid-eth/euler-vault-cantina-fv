@@ -10,15 +10,6 @@
 
 **Mutation**: Path to the mutated file used to prove the property
 
-## Violated
-
-List of violated properties.
-
-| Property | Description | Category | Fix |
-| --- | --- | --- | --- |
-| L1 | protocolFeeShare() displays icorrect value as it doesn't consider 50% limit | Unit Test | [Governance_L1_fix/1.sol](./mutations/Governance_L1_fix/1.sol) |
-| L2 | LTVFull() displays incorrect liquidation LTV | Unit Test | [Governance_L2_fix/1.sol](./mutations/Governance_L2_fix/1.sol) |
-
 ## Common
 
 These properties are global and include invariants and parametric rules, designed to be tested across multiple contracts: `Borrowing`, `Vault` (including `Token`), `Governance`, `Liquidation`, and `RiskManager`. 
@@ -34,7 +25,7 @@ These properties are global and include invariants and parametric rules, designe
 | COM-07 | Interest accumulator is updated only when last interest accumulator time changed | State Transition |  |
 | COM-08 | The vault's cash changes without assets transfer only when surplus assets available | State Transition |  |
 | COM-09 | Transferring assets from the vault MUST decrease the available cash balance | High Level |  |
-| COM-10 | Changes in the cash balance MUST correspond to changes in the total shares | High Level |  |
+| COM-10 | Changes in the cash balance MUST correspond to changes in the total shares | High Level | [Borrowing/Borrowing_0.sol](./mutations/Borrowing/Borrowing_0.sol) |
 | COM-11 | Accumulated fees MUST NOT decrease unless they are being reset to zero | Variable Transition |  |
 | COM-12 | Fees are retrieved only for the contract itself from the protocol config contract | State Transition |  |
 | COM-13 | Ramp duration can be used only when lowering liquidation LTV | High Level |  |
@@ -65,7 +56,7 @@ The properties below are categorized as valid state properties, which can be use
 | ST-03 | Snapshot stamp MUST be always equal to 1 | Valid State | |
 | ST-04 | Last interest accumulator timestamp set when positive accumulated fees | Valid State | |
 | ST-05 | Last interest accumulator timestamp MUST NOT be in the future | Valid State | |
-| ST-06 | Cash amount MUST NOT be less than the ERC20 assets stored in the current contract | Valid State | |
+| ST-06 | Cash amount MUST NOT be less than the ERC20 assets stored in the current contract | Valid State | [Vault/Vault_0.sol](./mutations/Vault/Vault_0.sol) |
 | ST-07 | Max supply and borrow caps limitations | Valid State | |
 | ST-08 | Hooks limitations | Valid State | |
 | ST-09 | Accumulated fees limitations | Valid State | |
@@ -84,7 +75,7 @@ The properties below are categorized as valid state properties, which can be use
 | ST-22 | Liquidation LTV is calculated dynamically only when ramping is in progress and always between the target liquidation LTV and the initial liquidation LTV | Valid State | |
 | ST-23 | When ramping is in progress, the time remaining is always less than or equal to the ramp duration | Valid State | |
 | ST-24 | Config flags limitations | Valid State |  |
-| ST-25 | Transfer assets to zero address not allowed | Valid State |  |
+| ST-25 | Transfer assets to zero address not allowed | Valid State | [AssetTransfers/AssetTransfers_0.sol](./mutations/AssetTransfers/AssetTransfers_0.sol) |
 | ST-26 | Interest rate has a maximum limit of 1,000,000 APY |  |
 | ST-27 | User interest accumulator always less or equal vault interest accumulator | Valid State | |
 | ST-28 | User's interest accumulator set when non-zero owed | Valid State |  |
@@ -145,3 +136,12 @@ The properties below are categorized as valid state properties, which can be use
 | --- | --- | --- | --- |
 | LIQ-01 | Liquidation operations are prohibited until the cool-down period has passed | High Level |  |
 | LIQ-02 | Check liquidation healthy | High Level |  |
+
+## Violated
+
+List of violated properties.
+
+| Property | Description | Category | Fix |
+| --- | --- | --- | --- |
+| L1 | protocolFeeShare() displays icorrect value as it doesn't consider 50% limit | Unit Test | [Governance_L1_fix/1.sol](./mutations/Governance_L1_fix/1.sol) |
+| L2 | LTVFull() displays incorrect liquidation LTV | Unit Test | [Governance_L2_fix/1.sol](./mutations/Governance_L2_fix/1.sol) |
