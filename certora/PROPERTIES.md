@@ -153,7 +153,7 @@ The properties below are categorized as valid state properties, which can be use
 | LIQ-04 | State change functions are protected against reentrancy | Valid State |  |
 | LIQ-05 | Specific functions can modify state | State Transition |  |
 | LIQ-06 | Possibility of modifying state | State Transition |  |
-| LIQ-07 | Specific view functions are protected against reentrancy |  |  |
+| LIQ-07 | Specific view functions are protected against reentrancy | Valid State |  |
 | LIQ-08 | Possibility of liquidation | High Level |  |
 | LIQ-09 | Hook execution allowance | Valid State |  |
 | LIQ-10 | Hook execution possibility | State Transition |  |
