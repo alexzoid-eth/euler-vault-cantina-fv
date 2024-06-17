@@ -97,6 +97,11 @@ The properties below are categorized as valid state properties, which can be use
 | VLT-08 | State change functions are protected against reentrancy | Valid State |  |
 | VLT-09 | Anyone can execute view functions | State Transition |  |
 | VLT-10 | Specific view functions are protected against reentrancy, while others are not | Valid State |  |
+| VLT-11 | Specific functions can modify state |  |  |
+| VLT-12 | Possibility of modifying state |  |  |
+| VLT-13 | Hook execution allowance |  |  |
+| VLT-14 | Hook execution possibility |  |  |
+| VLT-15 | Hook execution restriction |  |  |
 
 ## Governance
 
@@ -123,12 +128,20 @@ The properties below are categorized as valid state properties, which can be use
 | GOV-19 | Possibility of modifying state | State Transition |  |
 | GOV-20 | State change functions are protected against reentrancy | Valid State | [Governance/3.sol](./mutations/Governance/3.sol) |
 | GOV-21 | Anyone can execute view functions | Valid State | [Governance/6.sol](./mutations/Governance/6.sol) |
+| GOV-22 | Hook execution allowance |  |  |
+| GOV-23 | Hook execution possibility |  |  |
+| GOV-24 | Hook execution restriction |  |  |
 
 ## RiskManager
 
 | Property | Description | Category | Mutation |
 | --- | --- | --- | --- |
 | RM-01 | Total shares and total borrows limitations | Valid State | |
+| RM-02 | View functions don't update the state |  |  |
+| RM-03 | Specific functions can modify state |  |  |
+| RM-04 | Possibility of modifying state |  |  |
+| RM-05 | Specific view functions are protected against reentrancy |  |  |
+| RM-06 | Hook execution restriction |  |  |
 
 ## Liquidation
 
@@ -136,6 +149,28 @@ The properties below are categorized as valid state properties, which can be use
 | --- | --- | --- | --- |
 | LIQ-01 | Liquidation operations are prohibited until the cool-down period has passed | High Level |  |
 | LIQ-02 | Check liquidation healthy | High Level |  |
+| LIQ-03 | View functions don't update the state |  |  |
+| LIQ-04 | State change functions are protected against reentrancy |  |  |
+| LIQ-05 | Specific functions can modify state |  |  |
+| LIQ-06 | Possibility of modifying state |  |  |
+| LIQ-07 | Specific view functions are protected against reentrancy |  |  |
+| LIQ-08 | Possibility of liquidation |  |  |
+| LIQ-09 | Hook execution allowance |  |  |
+| LIQ-10 | Hook execution possibility |  |  |
+| LIQ-11 | Hook execution restriction |  |  |
+
+## Borrowing
+
+| Property | Description | Category | Mutation |
+| --- | --- | --- | --- |
+| BRW-01 | View functions don't update the state |  |  |
+| BRW-02 | State change functions are protected against reentrancy |  |  |
+| BRW-03 | Specific functions can modify state |  |  |
+| BRW-04 | Possibility of modifying state |  |  |
+| BRW-05 | Specific view functions are protected against reentrancy |  |  |
+| BRW-06 | Hook execution allowance |  |  |
+| BRW-07 | Hook execution possibility |  |  |
+| BRW-08 | Hook execution restriction |  |  |
 
 ## Violated
 

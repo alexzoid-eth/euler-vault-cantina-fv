@@ -29,5 +29,12 @@ definition HARNESS_METHODS(method f) returns bool
     = RISKMANAGER_HARNESS_METHODS(f);
 
 function functionOperationCVL(method f) returns mathint {
-    return 0;
+    if(f.selector == sig:checkVaultStatus().selector) {
+        return OP_VAULT_STATUS_CHECK();
+    } else {
+        return 0;
+    }
 }
+
+definition HOOK_METHODS(method f) returns bool = 
+    f.selector == sig:checkVaultStatus().selector;
