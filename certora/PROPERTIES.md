@@ -16,8 +16,8 @@ List of violated properties.
 
 | Property | Description | Category | Fix |
 | --- | --- | --- | --- |
-| L1 | protocolFeeShare() displays icorrect value as it doesn't consider 50% limit | Unit Test |  |
-| L2 | LTVFull() displays incorrect liquidation LTV | Unit Test |  |
+| L1 | protocolFeeShare() displays icorrect value as it doesn't consider 50% limit | Unit Test | [Governance_L1_fix/1.sol](./mutations/Governance_L1_fix/1.sol) |
+| L2 | LTVFull() displays incorrect liquidation LTV | Unit Test | [Governance_L2_fix/1.sol](./mutations/Governance_L2_fix/1.sol) |
 
 ## Common
 
