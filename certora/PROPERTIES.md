@@ -179,4 +179,4 @@ List of violated properties.
 | Property | Description | Category | Fix |
 | --- | --- | --- | --- |
 | L1 | protocolFeeShare() displays icorrect value as it doesn't consider 50% limit | Unit Test | [Governance_L1_fix/1.sol](./mutations/Governance_L1_fix/1.sol) |
-| L1-EX | Ensure that protocol fee receiver never gets more fees than `protocolFeeShare()` getter returns |
+| L1-EX | Ensure that protocol fee receiver never gets more fees than `protocolFeeShare()` getter returns | High Level | [Governance_L1_fix/1.sol](./mutations/Governance_L1_fix/1.sol) |
