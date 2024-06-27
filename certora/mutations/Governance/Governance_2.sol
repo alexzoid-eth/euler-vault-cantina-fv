@@ -149,28 +149,11 @@ abstract contract GovernanceModule is IGovernance, BalanceUtils, BorrowUtils, LT
         virtual
         reentrantOK
         returns (uint16, uint16, uint16, uint48, uint32)
-
-/**************************** Mutation Diff Block Start ****************************
-diff --git a/src/EVault/modules/Governance.sol b/src/EVault/modules/Governance.sol
-index 0b5ade0..61ab2d3 100644
---- a/src/EVault/modules/Governance.sol
-+++ b/src/EVault/modules/Governance.sol
-@@ -153,7 +153,7 @@ abstract contract GovernanceModule is IGovernance, BalanceUtils, BorrowUtils, LT
-         LTVConfig memory ltv = vaultStorage.ltvLookup[collateral];
-         return (
-             ltv.borrowLTV.toUint16(),
--            ltv.liquidationLTV.toUint16(),
-+            LTVLiquidation(collateral),
-             ltv.initialLiquidationLTV.toUint16(),
-             ltv.targetTimestamp,
-             ltv.rampDuration
-**************************** Mutation Diff Block End *****************************/
-
     {
         LTVConfig memory ltv = vaultStorage.ltvLookup[collateral];
         return (
             ltv.borrowLTV.toUint16(),
-            LTVLiquidation(collateral),
+            ltv.liquidationLTV.toUint16(),
             ltv.initialLiquidationLTV.toUint16(),
             ltv.targetTimestamp,
             ltv.rampDuration
@@ -243,7 +226,8 @@ index 0b5ade0..61ab2d3 100644
         Shares protocolShares = vaultCache.accumulatedFees - governorShares;
 
         // Decrease totalShares because increaseBalance will increase it by that total amount
-        vaultStorage.totalShares = vaultCache.totalShares = vaultCache.totalShares - vaultCache.accumulatedFees;
+        // mutation: fail to decrease totalShares by accumulatedFees
+        // vaultStorage.totalShares = vaultCache.totalShares = vaultCache.totalShares - vaultCache.accumulatedFees;
 
         vaultStorage.accumulatedFees = vaultCache.accumulatedFees = Shares.wrap(0);
 
