@@ -2,10 +2,10 @@
 
 # Create a mutation for a specific contract, use second parameter as config file name
 # Examples:
-#    ./certora/mutations/addMutation.sh ActivePool ./packages/contracts/contracts/ActivePool.sol
-#    ./certora/mutations/addMutation.sh CollSurplusPool ./packages/contracts/contracts/CollSurplusPool.sol
-#    ./certora/mutations/addMutation.sh EBTCToken ./packages/contracts/contracts/EBTCToken.sol
-#    ./certora/mutations/addMutation.sh SortedCdps ./packages/contracts/contracts/SortedCdps.sol
+#    ./certora/scripts/add_mutation.sh ActivePool ./packages/contracts/contracts/ActivePool.sol
+#    ./certora/scripts/add_mutation.sh CollSurplusPool ./packages/contracts/contracts/CollSurplusPool.sol
+#    ./certora/scripts/add_mutation.sh EBTCToken ./packages/contracts/contracts/EBTCToken.sol
+#    ./certora/scripts/add_mutation.sh SortedCdps ./packages/contracts/contracts/SortedCdps.sol
 
 # Function to add diff block above modified code
 add_diff_block() {
@@ -40,9 +40,9 @@ CONTRACT_FILENAME="$2"
 
 if [ -z "$MUTATION_DIR_NAME" ] || [ -z "$CONTRACT_FILENAME" ]; then
     echo "usage:"
-    echo "  ./addMutation.sh [MUTATION_DIR_NAME] [CONTRACT_FILENAME]"
+    echo "  ./add_mutation.sh [MUTATION_DIR_NAME] [CONTRACT_FILENAME]"
     echo "Example:"
-    echo "  ./certora/mutations/addMutation.sh ActivePool ./packages/contracts/contracts/ActivePool.sol"
+    echo "  ./certora/scripts/add_mutation.sh ActivePool ./packages/contracts/contracts/ActivePool.sol"
     exit 0
 fi
 

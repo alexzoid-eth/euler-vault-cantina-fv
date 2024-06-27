@@ -6,19 +6,19 @@
 # Examples:
 # 
 # Run ActivePool.conf:
-#    ./certora/mutations/checkMutation.sh ActivePool
+#    ./certora/scripts/check_mutation.sh ActivePool
 #
 # Run ActivePool.conf for a `rule_name` rule:
-#    ./certora/mutations/checkMutation.sh ActivePool --rule rule_name
+#    ./certora/scripts/check_mutation.sh ActivePool --rule rule_name
 #
 # Prove ActivePool/15.sol patch for ActivePool.conf:
-#    ./certora/mutations/checkMutation.sh ActivePool ./packages/contracts/contracts/ActivePool.sol 15
+#    ./certora/scripts/check_mutation.sh ActivePool ./packages/contracts/contracts/ActivePool.sol 15
 #
 # Prove 15.sol patch for a `rule_name` rule:
-#    ./certora/mutations/checkMutation.sh ActivePool ./packages/contracts/contracts/ActivePool.sol 15 --rule rule_name
+#    ./certora/scripts/check_mutation.sh ActivePool ./packages/contracts/contracts/ActivePool.sol 15 --rule rule_name
 #
 # Prove ActivePool_gambit/3.sol patch for ActivePool.conf:
-#    ./certora/mutations/checkMutation.sh ActivePool_gambit ./packages/contracts/contracts/ActivePool.sol 3
+#    ./certora/scripts/check_mutation.sh ActivePool_gambit ./packages/contracts/contracts/ActivePool.sol 3
 #
 
 if [ "$#" -lt 1 ]; then
