@@ -13,29 +13,34 @@ rule protocolFeeShareLimited(env e) {
     assert(to_mathint(protocolFeeShare(e)) <= MAX_PROTOCOL_FEE_SHARE());
 }
 
-// L1-EX | Ensure that protocol fee receiver never gets more fees than `protocolFeeShare()` getter returns 
+// L1-EX | Ensure that protocol fee receiver gets an amount of shares equal to what `protocolFeeShare()` getter returns
 rule protocolFeeShareLimitedEx(env e, method f, calldataarg args) {
 
+    // Retrieve the addresses for the governor and protocol fee receivers
     address governor = feeReceiver();
     address protocol = ghostProtocolFeeReceiver[currentContract];
 
-    // Safe assumption: governor fee receiver is set and not equal to protocol fee receiver
+    // Safe assumption: ensure that the governor fee receiver is set and is not the same as the protocol fee receiver
     require(governor != 0);
     require(governor != protocol);
 
-    // Protocol shares expectations based on `protocolFeeShare()` getter
+    // Get the expected protocol fee shares based on the `protocolFeeShare()` getter
     mathint getterFeeShare = to_mathint(protocolFeeShare(e));
     mathint governorExpectShares = (ghostAccumulatedFees * (CONFIG_SCALE() - getterFeeShare)) / CONFIG_SCALE();
     mathint protocolExpectShares = ghostAccumulatedFees - governorExpectShares;
 
-    // Protocol shares before
+    // Capture the protocol fee receiver's balance before the function call
     mathint protocolBalanceBefore = ghostUsersDataBalance[protocol];
 
+    // Execute any external function
     f(e, args);
 
-    // Protocol shares increase after
-    mathint protocolGotShares = ghostUsersDataBalance[protocol] - protocolBalanceBefore;
+    // Capture the protocol fee receiver's balance after the function call
+    mathint protocolBalanceAfter = ghostUsersDataBalance[protocol];
 
-    // Protocol MUST NOT receive more than expected with `protocolFeeShare()` (1 wei rounding tolerance)
-    assert(protocolExpectShares >= protocolGotShares);
+    // Ensure that any change in the protocol fee receiver's balance is as expected
+    // The increase in protocol fee receiver shares MUST equal the expectations based on the `protocolFeeShare()` getter
+    assert(protocolBalanceAfter != protocolBalanceBefore 
+        => protocolBalanceAfter - protocolBalanceBefore == protocolExpectShares
+    );
 }
